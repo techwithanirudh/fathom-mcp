@@ -75,7 +75,11 @@
     }
   },
   "mounts": [
-    "source=${localEnv:HOME},target=/mnt/host,type=bind,readonly"
+    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig.local,target=/home/dev/.gitconfig.local,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/git,target=/home/dev/.config/git,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/opencode,target=/home/dev/.config/opencode,type=bind,readonly"
   ],
   "postCreateCommand": [
     "./.devcontainer/scripts/post-create.sh"

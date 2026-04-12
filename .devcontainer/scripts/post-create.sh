@@ -15,28 +15,6 @@ copy_env_example() {
   fi
 }
 
-copy_path_if_present() {
-  local src="$1"
-  local dst="$2"
-
-  if [[ -e "$src" ]]; then
-    mkdir -p "$(dirname "$dst")"
-    rsync -a "$src" "$dst"
-  fi
-}
-
-install_host_auth_and_config() {
-  echo "Syncing safe host config"
-
-  copy_path_if_present /mnt/host/.gitconfig "$HOME/.gitconfig"
-  copy_path_if_present /mnt/host/.gitconfig.local "$HOME/.gitconfig.local"
-  copy_path_if_present /mnt/host/.npmrc "$HOME/.npmrc"
-  copy_path_if_present /mnt/host/.bunfig.toml "$HOME/.bunfig.toml"
-  copy_path_if_present /mnt/host/.config/gh/ "$HOME/.config/gh/"
-  copy_path_if_present /mnt/host/.config/opencode/ "$HOME/.config/opencode/"
-  copy_path_if_present /mnt/host/.config/git/ "$HOME/.config/git/"
-}
-
 ensure_dotfiles() {
   if [[ -d "$DOTFILES_DIR/.git" ]]; then
     echo "Updating dotfiles in $DOTFILES_DIR"
@@ -70,7 +48,6 @@ install_project_deps() {
 }
 
 copy_env_example
-install_host_auth_and_config
 ensure_dotfiles
 install_dotfiles
 install_project_deps
