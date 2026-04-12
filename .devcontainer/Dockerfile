@@ -1,10 +1,22 @@
-FROM mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+FROM debian:bookworm-slim
 
-ARG BUN_VERSION=1.2.9
+ENV LANG="C.UTF-8"
+ARG DEBIAN_FRONTEND="noninteractive"
 
-RUN curl -fsSL https://bun.sh/install | bash -s -- bun-v${BUN_VERSION} \
-    && mv /root/.bun/bin/bun /usr/local/bin/bun \
-    && mv /root/.bun/bin/bunx /usr/local/bin/bunx \
-    && rm -rf /root/.bun
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        jq \
+        nano \
+        unzip \
+        vim-tiny \
+        zip \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y \
+    && apt-get clean -y
 
-ENV BUN_INSTALL=/usr/local
+ENV SHELL=/bin/bash \
+    DOCKER_BUILDKIT=1 \
+    NODE_OPTIONS="--max-old-space-size=8192"
