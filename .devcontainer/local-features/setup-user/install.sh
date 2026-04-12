@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eux
 
-USERNAME=${USERNAME:-"coder"}
+USERNAME=${USERNAME:-"dev"}
 
 if [ "$(id -u)" -ne 0 ]; then
     echo 'Script must be run as root.'
@@ -32,13 +32,9 @@ else
     usermod -aG docker "$USERNAME"
 fi
 
-ln -snf /var/tmp/coder/coder-cli/coder /usr/local/bin/coder
-ln -snf /var/tmp/coder/code-server/bin/code-server /usr/local/bin/code-server
-
 cat <<EOF >> "/etc/sudoers.d/${USERNAME}"
 Defaults secure_path="${NODE_PATH}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/${USERNAME}/.local/bin"
 EOF
 
-echo "alias cc=\"IS_SANDBOX=1 claude --dangerously-skip-permissions\"" >> "${USER_HOME}/.bashrc"
 chown "${USERNAME}:${USERNAME}" "${USER_HOME}/.bashrc"
 echo "Done!"

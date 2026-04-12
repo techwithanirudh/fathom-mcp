@@ -28,17 +28,17 @@ copy_path_if_present() {
 install_host_auth_and_config() {
   echo "Syncing host auth and config"
 
-  copy_path_if_present /mnt/home/coder/.gitconfig "$HOME/.gitconfig"
-  copy_path_if_present /mnt/home/coder/.gitconfig.local "$HOME/.gitconfig.local"
-  copy_path_if_present /mnt/home/coder/.ssh/ "$HOME/.ssh/"
-  copy_path_if_present /mnt/home/coder/.codex/ "$HOME/.codex/"
-  copy_path_if_present /mnt/home/coder/.claude/ "$HOME/.claude/"
-  copy_path_if_present /mnt/home/coder/.npmrc "$HOME/.npmrc"
-  copy_path_if_present /mnt/home/coder/.bunfig.toml "$HOME/.bunfig.toml"
-  copy_path_if_present /mnt/home/coder/.config/claude/ "$HOME/.config/claude/"
-  copy_path_if_present /mnt/home/coder/.config/gh/ "$HOME/.config/gh/"
-  copy_path_if_present /mnt/home/coder/.config/opencode/ "$HOME/.config/opencode/"
-  copy_path_if_present /mnt/home/coder/.config/git/ "$HOME/.config/git/"
+  copy_path_if_present /mnt/host-home/.gitconfig "$HOME/.gitconfig"
+  copy_path_if_present /mnt/host-home/.gitconfig.local "$HOME/.gitconfig.local"
+  copy_path_if_present /mnt/host-home/.ssh/ "$HOME/.ssh/"
+  copy_path_if_present /mnt/host-home/.codex/ "$HOME/.codex/"
+  copy_path_if_present /mnt/host-home/.claude/ "$HOME/.claude/"
+  copy_path_if_present /mnt/host-home/.npmrc "$HOME/.npmrc"
+  copy_path_if_present /mnt/host-home/.bunfig.toml "$HOME/.bunfig.toml"
+  copy_path_if_present /mnt/host-home/.config/claude/ "$HOME/.config/claude/"
+  copy_path_if_present /mnt/host-home/.config/gh/ "$HOME/.config/gh/"
+  copy_path_if_present /mnt/host-home/.config/opencode/ "$HOME/.config/opencode/"
+  copy_path_if_present /mnt/host-home/.config/git/ "$HOME/.config/git/"
 
   [[ -d "$HOME/.ssh" ]] && chmod 0700 "$HOME/.ssh"
 }
