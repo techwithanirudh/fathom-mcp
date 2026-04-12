@@ -82,8 +82,7 @@
     }
   },
   "mounts": [
-    "source=devcontainer-home,target=/home/dev,type=volume",
-    "source=${localEnv:HOME},target=/mnt/host-home,type=bind,readonly"
+    "source=${localEnv:HOME},target=/mnt/host,type=bind,readonly"
   ],
   "postCreateCommand": [
     "./.devcontainer/scripts/post-create.sh"
