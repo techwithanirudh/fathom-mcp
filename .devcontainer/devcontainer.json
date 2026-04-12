@@ -1,5 +1,5 @@
 {
-  "name": "Fathom MCP",
+  "name": "Local Devcontainer",
   "build": {
     "dockerfile": "./Dockerfile",
     "context": "."

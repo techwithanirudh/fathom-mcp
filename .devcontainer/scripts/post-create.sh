@@ -26,21 +26,15 @@ copy_path_if_present() {
 }
 
 install_host_auth_and_config() {
-  echo "Syncing host auth and config"
+  echo "Syncing safe host config"
 
   copy_path_if_present /mnt/host-home/.gitconfig "$HOME/.gitconfig"
   copy_path_if_present /mnt/host-home/.gitconfig.local "$HOME/.gitconfig.local"
-  copy_path_if_present /mnt/host-home/.ssh/ "$HOME/.ssh/"
-  copy_path_if_present /mnt/host-home/.codex/ "$HOME/.codex/"
-  copy_path_if_present /mnt/host-home/.claude/ "$HOME/.claude/"
   copy_path_if_present /mnt/host-home/.npmrc "$HOME/.npmrc"
   copy_path_if_present /mnt/host-home/.bunfig.toml "$HOME/.bunfig.toml"
-  copy_path_if_present /mnt/host-home/.config/claude/ "$HOME/.config/claude/"
   copy_path_if_present /mnt/host-home/.config/gh/ "$HOME/.config/gh/"
   copy_path_if_present /mnt/host-home/.config/opencode/ "$HOME/.config/opencode/"
   copy_path_if_present /mnt/host-home/.config/git/ "$HOME/.config/git/"
-
-  [[ -d "$HOME/.ssh" ]] && chmod 0700 "$HOME/.ssh"
 }
 
 ensure_dotfiles() {
