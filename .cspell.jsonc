@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "dictionaries": ["software-terms", "npm"],
+  "files": ["**", ".github/**", ".claude/**"],
+  "ignorePaths": ["bun.lock", "bun.lockb"],
+  "import": ["@cspell/dict-bash/cspell-ext.json"],
+  "useGitignore": true,
+  "version": "0.2",
+  "words": [
+    "fathom",
+    "lefthook",
+    "modelcontextprotocol",
+    "Qwik",
+    "streamable",
+    "Streamable",
+    "techwithanirudh",
+    "ultracite"
+  ]
+}

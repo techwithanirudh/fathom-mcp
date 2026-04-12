@@ -63,7 +63,5 @@
       }
     }
   },
-  "postCreateCommand": [
-    "./.devcontainer/scripts/post-create.sh"
-  ]
+  "postCreateCommand": ["./.devcontainer/scripts/post-create.sh"]
 }
