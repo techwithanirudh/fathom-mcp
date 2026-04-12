@@ -22,26 +22,15 @@
       "version": "24",
       "nodeGypDependencies": "false"
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest",
-      "moby": "false"
-    },
     "ghcr.io/devcontainers-extra/features/bun:1": {
       "version": "latest"
-    },
-    "./local-features/setup-user": {}
+    }
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/devcontainers/features/common-utils",
     "ghcr.io/devcontainers/features/git",
     "ghcr.io/devcontainers/features/node",
-    "ghcr.io/devcontainers-extra/features/bun",
-    "ghcr.io/devcontainers/features/github-cli",
-    "ghcr.io/devcontainers/features/docker-in-docker",
-    "./local-features/setup-user"
+    "ghcr.io/devcontainers-extra/features/bun"
   ],
   "remoteUser": "dev",
   "containerUser": "dev",
@@ -74,13 +63,6 @@
       }
     }
   },
-  "mounts": [
-    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly",
-    "source=${localEnv:HOME}/.gitconfig.local,target=/home/dev/.gitconfig.local,type=bind,readonly",
-    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind,readonly",
-    "source=${localEnv:HOME}/.config/git,target=/home/dev/.config/git,type=bind,readonly",
-    "source=${localEnv:HOME}/.config/opencode,target=/home/dev/.config/opencode,type=bind,readonly"
-  ],
   "postCreateCommand": [
     "./.devcontainer/scripts/post-create.sh"
   ]
