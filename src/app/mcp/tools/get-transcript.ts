@@ -4,11 +4,7 @@ import { z } from 'zod'
 import { createFathomClient } from '@/server/fathom'
 import type { TranscriptResult } from '@/types/fathom'
 import { transcriptOutputSchema } from '../schemas'
-
-const err = (text: string) => ({
-  isError: true as const,
-  content: [{ type: 'text' as const, text }],
-})
+import { err } from '../utils'
 
 export function registerGetTranscript(server: McpServer) {
   server.registerTool(

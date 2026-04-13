@@ -4,11 +4,7 @@ import { z } from 'zod'
 import { createFathomClient } from '@/server/fathom'
 import type { TeamListResult } from '@/types/fathom'
 import { teamListOutputSchema } from '../schemas'
-
-const err = (text: string) => ({
-  isError: true as const,
-  content: [{ type: 'text' as const, text }],
-})
+import { err } from '../utils'
 
 export function registerListTeams(server: McpServer) {
   server.registerTool(
