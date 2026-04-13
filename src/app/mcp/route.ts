@@ -38,7 +38,7 @@ const handler = withMcpAuth(
     }
     return verifyToken(bearerToken)
   },
-  { required: true, resourceUrl: `${env.NEXT_PUBLIC_BASE_URL}/mcp` }
+  { required: true, resourceUrl: env.NEXT_PUBLIC_BASE_URL }
 )
 
 export { handler as GET, handler as POST, handler as DELETE }
