@@ -145,6 +145,22 @@ export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
   return { email: top.email, workspaceName: `${first}'s workspace` }
 }
 
+export const getFathomBearerToken = async (userId: string) => {
+  const tokenStore = new DbTokenStore(userId)
+  const getToken = Fathom.withAuthorization({
+    clientId: env.FATHOM_CLIENT_ID,
+    clientSecret: env.FATHOM_CLIENT_SECRET,
+    code: '',
+    redirectUri: callbackUrl(),
+    tokenStore,
+  })
+  const security = await getToken()
+  if (!security.bearerAuth) {
+    throw new Error('No bearer token available for user.')
+  }
+  return security.bearerAuth
+}
+
 export const findUserByEmail = async (email: string) => {
   const [user] = await db
     .select()

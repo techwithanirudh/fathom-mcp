@@ -1,10 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
-import { createFathomClient } from '@/server/fathom'
+import { getFathomBearerToken } from '@/server/fathom'
 import type { TranscriptResult } from '@/types/fathom'
 import { transcriptOutputSchema } from '../schemas'
 import { err } from '../utils'
+
+const FATHOM_API = 'https://api.fathom.ai/external/v1'
 
 export function getTranscriptTool(server: McpServer) {
   server.registerTool(
@@ -17,7 +19,7 @@ export function getTranscriptTool(server: McpServer) {
         readOnlyHint: true,
       },
       description:
-        'Get the full transcript of a Fathom meeting. Pages through recordings until the requested recording ID is found.',
+        'Get the full transcript of a Fathom meeting by recording ID.',
       inputSchema: {
         recording_id: z
           .number()
@@ -33,43 +35,50 @@ export function getTranscriptTool(server: McpServer) {
       }
 
       try {
-        const client = createFathomClient(userId)
-        const iter = await client.listMeetings({ includeTranscript: true })
+        const token = await getFathomBearerToken(userId)
+        const res = await fetch(
+          `${FATHOM_API}/recordings/${recording_id}/transcript`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
 
-        for await (const page of iter) {
-          if (!page) {
-            break
-          }
-
-          const match = page.result.items.find(
-            (m) => m.recordingId === recording_id
+        if (!res.ok) {
+          const text = await res.text()
+          return err(
+            `Fathom API error ${res.status}: ${text || res.statusText}`
           )
-          if (match) {
-            const result: TranscriptResult = {
-              transcript: (match.transcript ?? []).map((t) => ({
-                speaker: {
-                  displayName: t.speaker.displayName,
-                  matchedCalendarInviteeEmail:
-                    t.speaker.matchedCalendarInviteeEmail,
-                },
-                text: t.text,
-                timestamp: t.timestamp,
-              })),
-            }
-            return {
-              content: [
-                { type: 'text', text: JSON.stringify(result, null, 2) },
-              ],
-              structuredContent: result as unknown as Record<string, unknown>,
-            }
-          }
-
-          if (!page.result.nextCursor) {
-            break
-          }
         }
 
-        return err(`Recording ${recording_id} not found.`)
+        const json = (await res.json()) as { transcript?: unknown }
+
+        if (!Array.isArray(json.transcript)) {
+          return err(`No transcript available for recording ${recording_id}.`)
+        }
+
+        const result: TranscriptResult = {
+          transcript: json.transcript.map(
+            (t: {
+              speaker: {
+                display_name: string
+                matched_calendar_invitee_email?: string | null
+              }
+              text: string
+              timestamp: string
+            }) => ({
+              speaker: {
+                displayName: t.speaker.display_name,
+                matchedCalendarInviteeEmail:
+                  t.speaker.matched_calendar_invitee_email,
+              },
+              text: t.text,
+              timestamp: t.timestamp,
+            })
+          ),
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         await server.server.sendLoggingMessage({
