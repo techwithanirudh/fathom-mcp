@@ -6,7 +6,7 @@ import type { TranscriptResult } from '@/types/fathom'
 import { transcriptOutputSchema } from '../schemas'
 import { err } from '../utils'
 
-export function registerGetTranscript(server: McpServer) {
+export function getTranscriptTool(server: McpServer) {
   server.registerTool(
     'get_transcript',
     {

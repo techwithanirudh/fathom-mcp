@@ -6,7 +6,7 @@ import type { MeetingListItem, MeetingListResult } from '@/types/fathom'
 import { meetingListOutputSchema } from '../schemas'
 import { err } from '../utils'
 
-export function registerListMeetings(server: McpServer) {
+export function listMeetingsTool(server: McpServer) {
   server.registerTool(
     'list_meetings',
     {

@@ -4,21 +4,13 @@ import { env } from '@/env'
 import { verifyToken } from '@/server/tokens'
 import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
-import { registerGetSummary } from './tools/get-summary'
-import { registerGetTranscript } from './tools/get-transcript'
-import { registerListMeetings } from './tools/list-meetings'
-import { registerListTeamMembers } from './tools/list-team-members'
-import { registerListTeams } from './tools/list-teams'
+import { registerTools } from './tools'
 
 const mcpHandler = createMcpHandler(
   (server) => {
     registerPrompts(server)
     registerResources(server)
-    registerListMeetings(server)
-    registerGetTranscript(server)
-    registerGetSummary(server)
-    registerListTeams(server)
-    registerListTeamMembers(server)
+    registerTools(server)
   },
   {
     serverInfo: { name: 'fathom-mcp', version: '1.0.0' },

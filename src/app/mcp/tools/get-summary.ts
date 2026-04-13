@@ -6,7 +6,7 @@ import type { SummaryResult } from '@/types/fathom'
 import { summaryOutputSchema } from '../schemas'
 import { err } from '../utils'
 
-export function registerGetSummary(server: McpServer) {
+export function getSummaryTool(server: McpServer) {
   server.registerTool(
     'get_summary',
     {

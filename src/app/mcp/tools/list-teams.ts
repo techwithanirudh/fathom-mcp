@@ -6,7 +6,7 @@ import type { TeamListResult } from '@/types/fathom'
 import { teamListOutputSchema } from '../schemas'
 import { err } from '../utils'
 
-export function registerListTeams(server: McpServer) {
+export function listTeamsTool(server: McpServer) {
   server.registerTool(
     'list_teams',
     {
