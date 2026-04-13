@@ -16,9 +16,7 @@ export interface MeetingListItem {
   scheduledEnd: string
   scheduledStart: string
   shareUrl: string
-  summary?: MeetingSummary
   title: string
-  transcript?: TranscriptItem[]
   url: string
 }
 
