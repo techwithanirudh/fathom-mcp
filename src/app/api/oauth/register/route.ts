@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
   const { client_name, client_uri, redirect_uris } = parsed.data
 
-  const clientId = await registerClient({
+  const client = await registerClient({
     name: client_name,
     uri: client_uri,
     redirectUris: redirect_uris,
@@ -40,7 +40,8 @@ export async function POST(req: Request) {
 
   return Response.json(
     createClientRegistrationResponse({
-      clientId,
+      clientId: client.id,
+      clientIdIssuedAt: client.issuedAt,
       clientName: client_name,
       clientUri: client_uri,
       grantTypes: parsed.data.grant_types,

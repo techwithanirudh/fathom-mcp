@@ -16,15 +16,17 @@ export const registerClient = async (input: {
   redirectUris: string[]
 }) => {
   const id = randomUUID()
+  const createdAt = new Date()
 
   await db.insert(oauthClients).values({
     id,
     name: input.name ?? null,
     uri: input.uri ?? null,
     redirectUris: JSON.stringify(input.redirectUris.map(normalizeRedirectUri)),
+    createdAt,
   })
 
-  return id
+  return { id, issuedAt: Math.floor(createdAt.getTime() / 1000) }
 }
 
 export const getClient = async (clientId: string) => {

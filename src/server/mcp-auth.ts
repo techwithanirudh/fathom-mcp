@@ -18,6 +18,7 @@ const tokenEndpoint = new URL('/api/oauth/token', baseUrl)
 const registrationEndpoint = new URL('/api/oauth/register', baseUrl)
 
 export const MCP_SCOPES = ['mcp'] as const
+const mcpScopeSet = new Set<string>(MCP_SCOPES)
 
 export const oauthMetadata = OAuthMetadataSchema.parse({
   issuer: baseUrl.toString(),
@@ -49,6 +50,7 @@ export const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(mcpUrl)
 export const resourceMetadataPath = new URL(resourceMetadataUrl).pathname
 
 const loopbackHosts = new Set(['localhost', '127.0.0.1'])
+const scopeSeparatorPattern = /\s+/
 
 const normalizeLoopbackUri = (value: string) => {
   const url = new URL(value)
@@ -85,6 +87,18 @@ export const parseDynamicClientRegistration = (body: unknown) => {
 }
 
 export const normalizeRedirectUri = normalizeLoopbackUri
+
+export const parseRequestedScopes = (scope?: string | null) => {
+  const requested = (scope ?? '')
+    .split(scopeSeparatorPattern)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return requested.length > 0 ? requested : [...MCP_SCOPES]
+}
+
+export const supportsRequestedScopes = (scope?: string | null) =>
+  parseRequestedScopes(scope).every((item) => mcpScopeSet.has(item))
 
 export const verifyAccessToken = (
   _req: Request,

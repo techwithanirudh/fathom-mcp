@@ -3,7 +3,10 @@ import { Button } from '@/components/ui/button'
 import { env } from '@/env'
 import { getSession } from '@/server/auth'
 import { createCode, getClient } from '@/server/auth/oauth'
-import { normalizeRedirectUri } from '@/server/mcp-auth'
+import {
+  normalizeRedirectUri,
+  supportsRequestedScopes,
+} from '@/server/mcp-auth'
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>
@@ -18,6 +21,7 @@ export default async function AuthorizePage({ searchParams }: Props) {
   const codeChallengeMethod = sp.code_challenge_method
   const state = sp.state ?? ''
   const responseType = sp.response_type
+  const requestedScope = sp.scope
   const normalizedRedirectUri = redirectUri
     ? normalizeRedirectUri(redirectUri)
     : undefined
@@ -34,6 +38,10 @@ export default async function AuthorizePage({ searchParams }: Props) {
 
   if (!client) {
     return <ErrorPage message='Unknown client.' />
+  }
+
+  if (!supportsRequestedScopes(requestedScope)) {
+    return <ErrorPage message='Requested scope is not supported.' />
   }
 
   if (

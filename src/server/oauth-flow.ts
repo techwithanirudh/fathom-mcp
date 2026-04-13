@@ -120,6 +120,7 @@ export const parseTokenRequest = async (req: Request) => {
 
 export const createClientRegistrationResponse = (input: {
   clientId: string
+  clientIdIssuedAt?: number
   clientName?: string
   clientUri?: string
   grantTypes: string[]
@@ -129,6 +130,7 @@ export const createClientRegistrationResponse = (input: {
 }) =>
   OAuthClientInformationFullSchema.parse({
     client_id: input.clientId,
+    client_id_issued_at: input.clientIdIssuedAt,
     client_name: input.clientName,
     client_uri: input.clientUri,
     grant_types: input.grantTypes,
