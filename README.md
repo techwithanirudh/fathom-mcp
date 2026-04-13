@@ -10,6 +10,7 @@ Built with Next.js 16 and [`mcp-handler`](https://www.npmjs.com/package/mcp-hand
 - **Bearer token auth** — create named tokens in the dashboard for API/script use
 - **5 tools** — list meetings, get transcripts, get summaries, list teams and members
 - **2 resources** — meeting transcripts and summaries accessible via `fathom://meeting/{id}/transcript` and `fathom://meeting/{id}/summary`
+- **3 prompts** — pre-built queries for recent meetings, action items, and meeting briefs
 - **Structured output** — all tools return typed `structuredContent` alongside text
 
 ## Tools
@@ -21,6 +22,14 @@ Built with Next.js 16 and [`mcp-handler`](https://www.npmjs.com/package/mcp-hand
 | `get_summary` | AI-generated summary for a recording |
 | `list_teams` | List workspace teams |
 | `list_team_members` | List members of a team |
+
+## Prompts
+
+| Prompt | Args | Description |
+|--------|------|-------------|
+| `recent_meetings` | `count?` | Summarise your most recent meetings |
+| `action_items` | `assignee?` | List open action items, optionally filtered by person |
+| `meeting_brief` | `recording_id` | Full brief for a single meeting (summary, decisions, action items, quotes) |
 
 ## Setup
 
