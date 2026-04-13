@@ -1,146 +1,37 @@
-import type { GetRecordingTranscriptRequest } from 'fathom-typescript/sdk/models/operations'
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
-import { z } from 'zod'
 
 import { env } from '@/env'
-import { createFathomClient } from '@/server/fathom'
 import { verifyToken } from '@/server/tokens'
+import { registerGetSummary } from './tools/get-summary'
+import { registerGetTranscript } from './tools/get-transcript'
+import { registerListMeetings } from './tools/list-meetings'
+import { registerListTeamMembers } from './tools/list-team-members'
+import { registerListTeams } from './tools/list-teams'
 
 const mcpHandler = createMcpHandler(
   (server) => {
-    server.registerTool(
-      'list_meetings',
-      {
-        description:
-          'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination.',
-        inputSchema: {
-          cursor: z
-            .string()
-            .optional()
-            .describe('Pagination cursor from a previous response.'),
-        },
-      },
-      async ({ cursor }, { authInfo }) => {
-        const userId = authInfo?.extra?.userId as string | undefined
-
-        if (!userId) {
-          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
-        }
-
-        const client = createFathomClient(userId)
-        const iter = await client.listMeetings({ cursor })
-
-        let meetings: {
-          id: number
-          title: string
-          meetingTitle: string | null
-          scheduledStart: Date
-          scheduledEnd: Date
-          url: string
-          shareUrl: string
-          recordedBy: string
-        }[] = []
-        let nextCursor: string | null = null
-
-        for await (const page of iter) {
-          if (!page) {
-            break
-          }
-
-          meetings = page.result.items.map((m) => ({
-            id: m.recordingId,
-            title: m.title,
-            meetingTitle: m.meetingTitle,
-            scheduledStart: m.scheduledStartTime,
-            scheduledEnd: m.scheduledEndTime,
-            url: m.url,
-            shareUrl: m.shareUrl,
-            recordedBy: m.recordedBy.name,
-          }))
-          nextCursor = page.result.nextCursor
-          break
-        }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ meetings, nextCursor }, null, 2),
-            },
-          ],
-        }
-      }
-    )
-
-    server.registerTool(
-      'get_transcript',
-      {
-        description: 'Get the full transcript of a Fathom meeting.',
-        inputSchema: {
-          recording_id: z
-            .number()
-            .int()
-            .describe('The recording ID from list_meetings.'),
-        },
-      },
-      async ({ recording_id }, { authInfo }) => {
-        const userId = authInfo?.extra?.userId as string | undefined
-
-        if (!userId) {
-          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
-        }
-
-        const client = createFathomClient(userId)
-        // destinationUrl is marked required in SDK types but optional in the API
-        const req = {
-          recordingId: recording_id,
-        } as GetRecordingTranscriptRequest
-        const res = await client.getRecordingTranscript(req)
-
-        if (!res) {
-          return { content: [{ type: 'text', text: 'Transcript not found.' }] }
-        }
-
-        return {
-          content: [{ type: 'text', text: JSON.stringify(res, null, 2) }],
-        }
-      }
-    )
-
-    server.registerTool(
-      'get_summary',
-      {
-        description: 'Get the AI-generated summary of a Fathom meeting.',
-        inputSchema: {
-          recording_id: z
-            .number()
-            .int()
-            .describe('The recording ID from list_meetings.'),
-        },
-      },
-      async ({ recording_id }, { authInfo }) => {
-        const userId = authInfo?.extra?.userId as string | undefined
-
-        if (!userId) {
-          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
-        }
-
-        const client = createFathomClient(userId)
-        const res = await client.getRecordingSummary({
-          recordingId: recording_id,
-        })
-
-        if (!res) {
-          return { content: [{ type: 'text', text: 'Summary not found.' }] }
-        }
-
-        return {
-          content: [{ type: 'text', text: JSON.stringify(res, null, 2) }],
-        }
-      }
-    )
+    registerListMeetings(server)
+    registerGetTranscript(server)
+    registerGetSummary(server)
+    registerListTeams(server)
+    registerListTeamMembers(server)
   },
-  { serverInfo: { name: 'fathom-mcp', version: '1.0.0' } }
+  {
+    serverInfo: { name: 'fathom-mcp', version: '1.0.0' },
+    instructions: `You are connected to Fathom, an AI meeting recorder. Use these tools to answer questions about meetings, transcripts, summaries, and team members.
+
+Tool guidance:
+- list_meetings: Start here. Use cursor for pagination. Pass include_transcript=true to get transcripts inline — prefer this over calling get_transcript separately when you need transcripts for multiple meetings.
+- get_transcript: Use when you need a single meeting's transcript by recording ID. It pages through recordings to find the match, so list_meetings with include_transcript=true is more efficient for recent meetings.
+- get_summary: Fetches the AI-generated meeting summary for a single recording. Pass include_summary=true to list_meetings instead if you need summaries for multiple meetings.
+- list_teams / list_team_members: Use to understand workspace structure or filter meetings by team.
+
+General tips:
+- Recording IDs come from list_meetings. Always call list_meetings first if you don't have one.
+- All paginated tools return nextCursor — use it to page through more results.
+- Transcripts include speaker names and timestamps relative to recording start (HH:MM:SS).
+- Action items and summaries are in English regardless of the meeting language.`,
+  }
 )
 
 const handler = withMcpAuth(
@@ -149,13 +40,9 @@ const handler = withMcpAuth(
     if (!bearerToken) {
       return undefined
     }
-
     return verifyToken(bearerToken)
   },
-  {
-    required: true,
-    resourceUrl: `${env.NEXT_PUBLIC_BASE_URL}/mcp`,
-  }
+  { required: true, resourceUrl: `${env.NEXT_PUBLIC_BASE_URL}/mcp` }
 )
 
 export { handler as GET, handler as POST, handler as DELETE }
