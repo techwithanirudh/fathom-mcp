@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+
 import { Button } from '@/components/ui/button'
 import { env } from '@/env'
 import { getSession } from '@/server/auth'
@@ -47,7 +48,7 @@ export default async function AuthorizePage({ searchParams }: Props) {
     connectUrl.searchParams.set('oauth_redirect_uri', redirectUri)
     connectUrl.searchParams.set('oauth_code_challenge', codeChallenge)
     connectUrl.searchParams.set('oauth_state', state)
-    redirect(connectUrl.pathname + connectUrl.search)
+    redirect((connectUrl.pathname + connectUrl.search) as never)
   }
 
   async function authorize() {
@@ -67,7 +68,7 @@ export default async function AuthorizePage({ searchParams }: Props) {
     const dest = new URL(redirectUri)
     dest.searchParams.set('code', code)
     dest.searchParams.set('state', state)
-    redirect(dest.toString())
+    redirect(dest.toString() as never)
   }
 
   async function deny() {
@@ -80,7 +81,7 @@ export default async function AuthorizePage({ searchParams }: Props) {
     const dest = new URL(redirectUri)
     dest.searchParams.set('error', 'access_denied')
     dest.searchParams.set('state', state)
-    redirect(dest.toString())
+    redirect(dest.toString() as never)
   }
 
   return (

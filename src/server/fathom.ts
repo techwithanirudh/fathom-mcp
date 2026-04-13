@@ -5,6 +5,8 @@ import { Fathom } from 'fathom-typescript'
 import type { Meeting } from 'fathom-typescript/sdk/models/shared/meeting'
 
 import { env } from '@/env'
+import { FATHOM_API_BASE } from '@/lib/constants'
+import type { TranscriptItem } from '@/types/fathom'
 import { decrypt, encrypt } from './auth/crypto'
 import { db } from './db'
 import { fathomTokens, users } from './db/schema'
@@ -143,6 +145,62 @@ export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
 
   const first = top.name.split(' ')[0] ?? 'Fathom'
   return { email: top.email, workspaceName: `${first}'s workspace` }
+}
+
+export const getFathomBearerToken = async (userId: string) => {
+  const tokenStore = new DbTokenStore(userId)
+  const getToken = Fathom.withAuthorization({
+    clientId: env.FATHOM_CLIENT_ID,
+    clientSecret: env.FATHOM_CLIENT_SECRET,
+    code: '',
+    redirectUri: callbackUrl(),
+    tokenStore,
+  })
+  const security = await getToken()
+  if (!security.bearerAuth) {
+    throw new Error('No bearer token available for user.')
+  }
+  return security.bearerAuth
+}
+
+export const fetchTranscript = async (
+  userId: string,
+  recordingId: number
+): Promise<TranscriptItem[]> => {
+  const token = await getFathomBearerToken(userId)
+  const res = await fetch(
+    `${FATHOM_API_BASE}/recordings/${recordingId}/transcript`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Fathom API error ${res.status}: ${text || res.statusText}`)
+  }
+
+  const json = (await res.json()) as { transcript?: unknown }
+
+  if (!Array.isArray(json.transcript)) {
+    throw new Error(`No transcript available for recording ${recordingId}.`)
+  }
+
+  return json.transcript.map(
+    (t: {
+      speaker: {
+        display_name: string
+        matched_calendar_invitee_email?: string | null
+      }
+      text: string
+      timestamp: string
+    }) => ({
+      speaker: {
+        displayName: t.speaker.display_name,
+        matchedCalendarInviteeEmail: t.speaker.matched_calendar_invitee_email,
+      },
+      text: t.text,
+      timestamp: t.timestamp,
+    })
+  )
 }
 
 export const findUserByEmail = async (email: string) => {

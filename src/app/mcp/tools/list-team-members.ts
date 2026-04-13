@@ -45,7 +45,7 @@ export function listTeamMembersTool(server: McpServer) {
             break
           }
           members = page.result.items.map((m) => ({
-            createdAt: m.createdAt,
+            createdAt: m.createdAt.toISOString(),
             email: m.email,
             name: m.name,
           }))

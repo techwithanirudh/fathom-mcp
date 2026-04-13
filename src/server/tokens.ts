@@ -58,7 +58,7 @@ export const verifyToken = async (
   return {
     token: raw,
     clientId: row.clientId ?? '',
-    scopes: [],
+    scopes: ['mcp'],
     extra: { userId: row.userId },
   }
 }

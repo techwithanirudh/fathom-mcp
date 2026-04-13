@@ -11,14 +11,12 @@ export interface MeetingListItem {
   invitees: MeetingInvitee[]
   meetingTitle: string | null
   recordedBy: string
-  recordingEnd: Date
-  recordingStart: Date
-  scheduledEnd: Date
-  scheduledStart: Date
+  recordingEnd: string
+  recordingStart: string
+  scheduledEnd: string
+  scheduledStart: string
   shareUrl: string
-  summary?: MeetingSummary
   title: string
-  transcript?: TranscriptItem[]
   url: string
 }
 
@@ -67,7 +65,7 @@ export interface SummaryResult {
 }
 
 export interface Team {
-  createdAt: Date
+  createdAt: string
   name: string
 }
 
@@ -77,7 +75,7 @@ export interface TeamListResult {
 }
 
 export interface TeamMember {
-  createdAt: Date
+  createdAt: string
   email: string
   name: string
 }

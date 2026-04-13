@@ -15,15 +15,17 @@ export const registerClient = async (input: {
   redirectUris: string[]
 }) => {
   const id = randomUUID()
+  const createdAt = new Date()
 
   await db.insert(oauthClients).values({
     id,
     name: input.name ?? null,
     uri: input.uri ?? null,
     redirectUris: JSON.stringify(input.redirectUris),
+    createdAt,
   })
 
-  return id
+  return { id, issuedAt: Math.floor(createdAt.getTime() / 1000) }
 }
 
 export const getClient = async (clientId: string) => {
@@ -95,11 +97,6 @@ export const redeemCode = async (params: {
     return null
   }
 
-  await db
-    .update(oauthCodes)
-    .set({ usedAt: new Date() })
-    .where(eq(oauthCodes.id, params.code))
-
   const expected = encodeBase64urlNoPadding(
     sha256(new TextEncoder().encode(params.codeVerifier))
   )
@@ -107,6 +104,11 @@ export const redeemCode = async (params: {
   if (expected !== row.codeChallenge) {
     return null
   }
+
+  await db
+    .update(oauthCodes)
+    .set({ usedAt: new Date() })
+    .where(eq(oauthCodes.id, params.code))
 
   return row.userId
 }

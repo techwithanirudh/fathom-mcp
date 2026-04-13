@@ -1,0 +1,60 @@
+Example repos reviewed
+
+1. NapthaAI/http-oauth-mcp-server
+GitHub: https://github.com/NapthaAI/http-oauth-mcp-server
+Why it matters:
+- Best overall architecture match for this app
+- Remote MCP auth
+- Local proxy-issued MCP token
+- Upstream OAuth kept separate
+- Uses MCP SDK provider patterns cleanly
+
+2. heroku/mcp-remote-auth-proxy
+GitHub: https://github.com/heroku/mcp-remote-auth-proxy
+Why it matters:
+- Best production-hardening reference
+- Strong token refresh/retry behavior
+- Better token lifecycle handling
+- Clean separation between identity provider auth and MCP proxy auth
+- Recommends the library @heroku/oauth-provider-adapters-for-mcp
+
+3. clerk/mcp-demo
+GitHub: https://github.com/clerk/mcp-demo
+Why it matters:
+- Good conceptual reference
+- Useful for understanding Clerk + MCP auth
+- Not the best architecture match for this repo
+
+4. Azure-Samples/remote-mcp-webapp-python-auth-oauth
+GitHub: https://github.com/Azure-Samples/remote-mcp-webapp-python-auth-oauth
+Why it matters:
+- Useful sample only
+- More hand-rolled auth logic
+- Not the best reference architecture
+
+Best picks
+
+- Best architecture match: NapthaAI/http-oauth-mcp-server
+- Best production proxy reference: heroku/mcp-remote-auth-proxy
+- Best conceptual/demo reference: clerk/mcp-demo
+
+Current recommendation
+
+- Keep using @modelcontextprotocol/sdk
+- Keep using mcp-handler
+- Keep the local MCP token architecture
+- Use NapthaAI/http-oauth-mcp-server as the main design reference
+- Use heroku/mcp-remote-auth-proxy for token lifecycle and proxy hardening ideas
+- Do not rewrite toward the Clerk demo architecture
+
+Observed ChatGPT auth request
+
+Example authorize URL parameters seen from ChatGPT:
+- response_type=code
+- scope=openid
+- redirect_uri=https://chatgpt.com/connector/oauth/...
+- resource=https://fathom-mcp.techwithanirudh.com//mcp
+- code_challenge_method=S256
+
+Important note:
+- ChatGPT was observed requesting scope=openid, not mcp, during setup

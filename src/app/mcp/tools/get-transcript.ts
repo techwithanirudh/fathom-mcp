@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
-import { createFathomClient } from '@/server/fathom'
+import { fetchTranscript } from '@/server/fathom'
 import type { TranscriptResult } from '@/types/fathom'
 import { transcriptOutputSchema } from '../schemas'
 import { err } from '../utils'
@@ -17,59 +17,52 @@ export function getTranscriptTool(server: McpServer) {
         readOnlyHint: true,
       },
       description:
-        'Get the full transcript of a Fathom meeting. Pages through recordings until the requested recording ID is found.',
+        'Get the full transcript of a Fathom meeting by recording ID. Use this whenever the user asks for a transcript, action items, or anything requiring the spoken content of a meeting.',
       inputSchema: {
         recording_id: z
           .number()
           .int()
           .describe('The recording ID from list_meetings.'),
+        format: z
+          .enum(['text', 'json'])
+          .optional()
+          .default('text')
+          .describe(
+            'Output format. "text" (default) returns a readable Speaker (HH:MM:SS): line format. "json" returns the raw structured array.'
+          ),
+        include_timestamps: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Include timestamps in text format. Default true.'),
       },
       outputSchema: transcriptOutputSchema,
     },
-    async ({ recording_id }, { authInfo }) => {
+    async ({ recording_id, format, include_timestamps }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string | undefined
       if (!userId) {
         return err('Unauthorized.')
       }
 
       try {
-        const client = createFathomClient(userId)
-        const iter = await client.listMeetings({ includeTranscript: true })
+        const transcript = await fetchTranscript(userId, recording_id)
+        const result: TranscriptResult = { transcript }
 
-        for await (const page of iter) {
-          if (!page) {
-            break
-          }
+        const text =
+          format === 'json'
+            ? JSON.stringify(result, null, 2)
+            : transcript
+                .map((t) =>
+                  include_timestamps
+                    ? `${t.speaker.displayName} (${t.timestamp}): ${t.text}`
+                    : `${t.speaker.displayName}: ${t.text}`
+                )
+                .join('\n')
 
-          const match = page.result.items.find(
-            (m) => m.recordingId === recording_id
-          )
-          if (match) {
-            const result: TranscriptResult = {
-              transcript: (match.transcript ?? []).map((t) => ({
-                speaker: {
-                  displayName: t.speaker.displayName,
-                  matchedCalendarInviteeEmail:
-                    t.speaker.matchedCalendarInviteeEmail,
-                },
-                text: t.text,
-                timestamp: t.timestamp,
-              })),
-            }
-            return {
-              content: [
-                { type: 'text', text: JSON.stringify(result, null, 2) },
-              ],
-              structuredContent: result as unknown as Record<string, unknown>,
-            }
-          }
-
-          if (!page.result.nextCursor) {
-            break
-          }
+        return {
+          content: [{ type: 'text', text }],
+          structuredContent: result as unknown as Record<string, unknown>,
         }
-
-        return err(`Recording ${recording_id} not found.`)
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         await server.server.sendLoggingMessage({

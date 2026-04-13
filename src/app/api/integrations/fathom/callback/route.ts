@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
 import { eq } from 'drizzle-orm'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { createSession } from '@/server/auth'
@@ -14,26 +13,14 @@ import {
   initFathomOAuth,
   saveFathomTokens,
 } from '@/server/fathom'
-
-interface PendingOAuth {
-  clientId: string
-  codeChallenge: string
-  redirectUri: string
-  state: string
-}
+import { consumeFathomOauthState } from '@/server/oauth-flow'
 
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
 
-  const jar = await cookies()
-  const savedState = jar.get('fathom_oauth_state')?.value
-  const returnTo = jar.get('fathom_oauth_return')?.value ?? '/tokens'
-  const pendingOAuth = jar.get('oauth_pending')?.value
-
-  jar.delete('fathom_oauth_state')
-  jar.delete('fathom_oauth_return')
+  const { pendingOauth, returnTo, savedState } = await consumeFathomOauthState()
 
   if (!(code && state) || state !== savedState) {
     redirect('/?error=invalid_state')
@@ -74,31 +61,21 @@ export async function GET(req: Request) {
   await saveFathomTokens(user.id, tempStore, email)
   await createSession(user.id)
 
-  jar.delete('oauth_pending')
-
-  if (pendingOAuth) {
-    let params: PendingOAuth
-
-    try {
-      params = JSON.parse(pendingOAuth) as PendingOAuth
-    } catch {
-      redirect('/tokens')
-    }
-
+  if (pendingOauth) {
     const authCode = await createCode({
-      clientId: params.clientId,
+      clientId: pendingOauth.clientId,
       userId: user.id,
-      redirectUri: params.redirectUri,
-      codeChallenge: params.codeChallenge,
+      redirectUri: pendingOauth.redirectUri,
+      codeChallenge: pendingOauth.codeChallenge,
     })
 
-    const dest = new URL(params.redirectUri)
+    const dest = new URL(pendingOauth.redirectUri)
     dest.searchParams.set('code', authCode)
-    dest.searchParams.set('state', params.state)
-    redirect(dest.toString())
+    dest.searchParams.set('state', pendingOauth.state)
+    redirect(dest.toString() as never)
   }
 
-  redirect(returnTo)
+  redirect(returnTo as never)
 }
 
 export const runtime = 'nodejs'

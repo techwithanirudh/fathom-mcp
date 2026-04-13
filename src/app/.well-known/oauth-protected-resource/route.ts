@@ -1,16 +1,9 @@
-import {
-  metadataCorsOptionsRequestHandler,
-  protectedResourceHandler,
-} from 'mcp-handler'
+import { metadataCorsOptionsRequestHandler } from 'mcp-handler'
 
-import { env } from '@/env'
+import { protectedResourceMetadata } from '@/server/mcp-auth'
 
-const baseUrl = env.NEXT_PUBLIC_BASE_URL
+export function GET() {
+  return Response.json(protectedResourceMetadata)
+}
 
-const handler = protectedResourceHandler({
-  authServerUrls: [baseUrl],
-  resourceUrl: `${baseUrl}/mcp`,
-})
-
-export const GET = handler
 export const OPTIONS = metadataCorsOptionsRequestHandler()

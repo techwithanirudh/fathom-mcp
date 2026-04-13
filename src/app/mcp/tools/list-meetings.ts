@@ -17,7 +17,7 @@ export function listMeetingsTool(server: McpServer) {
         readOnlyHint: true,
       },
       description:
-        'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination. Optionally include transcripts, summaries, and action items.',
+        'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination.',
       inputSchema: {
         cursor: z
           .string()
@@ -26,22 +26,13 @@ export function listMeetingsTool(server: McpServer) {
         include_action_items: z
           .boolean()
           .optional()
-          .describe('Include action items for each meeting.'),
-        include_summary: z
-          .boolean()
-          .optional()
-          .describe('Include AI-generated summary for each meeting.'),
-        include_transcript: z
-          .boolean()
-          .optional()
-          .describe('Include full transcript for each meeting.'),
+          .describe(
+            'Include AI-generated action items per meeting. May be empty, if so ALWAYS extract tasks from the transcript instead.'
+          ),
       },
       outputSchema: meetingListOutputSchema,
     },
-    async (
-      { cursor, include_action_items, include_summary, include_transcript },
-      { authInfo }
-    ) => {
+    async ({ cursor, include_action_items }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string | undefined
       if (!userId) {
         return err('Unauthorized.')
@@ -52,8 +43,6 @@ export function listMeetingsTool(server: McpServer) {
         const iter = await client.listMeetings({
           cursor,
           includeActionItems: include_action_items,
-          includeSummary: include_summary,
-          includeTranscript: include_transcript,
         })
 
         let meetings: MeetingListItem[] = []
@@ -87,28 +76,12 @@ export function listMeetingsTool(server: McpServer) {
             })),
             meetingTitle: m.meetingTitle,
             recordedBy: m.recordedBy.name,
-            recordingEnd: m.recordingEndTime,
-            recordingStart: m.recordingStartTime,
-            scheduledEnd: m.scheduledEndTime,
-            scheduledStart: m.scheduledStartTime,
+            recordingEnd: m.recordingEndTime.toISOString(),
+            recordingStart: m.recordingStartTime.toISOString(),
+            scheduledEnd: m.scheduledEndTime.toISOString(),
+            scheduledStart: m.scheduledStartTime.toISOString(),
             shareUrl: m.shareUrl,
-            summary: m.defaultSummary
-              ? {
-                  markdownFormatted: m.defaultSummary.markdownFormatted,
-                  templateName: m.defaultSummary.templateName,
-                }
-              : undefined,
             title: m.title,
-            transcript:
-              m.transcript?.map((t) => ({
-                speaker: {
-                  displayName: t.speaker.displayName,
-                  matchedCalendarInviteeEmail:
-                    t.speaker.matchedCalendarInviteeEmail,
-                },
-                text: t.text,
-                timestamp: t.timestamp,
-              })) ?? undefined,
             url: m.url,
           }))
           nextCursor = page.result.nextCursor
