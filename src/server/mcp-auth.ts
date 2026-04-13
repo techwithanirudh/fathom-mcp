@@ -19,6 +19,12 @@ const registrationEndpoint = new URL('/api/oauth/register', baseUrl)
 
 export const MCP_SCOPES = ['mcp'] as const
 const mcpScopeSet = new Set<string>(MCP_SCOPES)
+const toleratedIdentityScopes = new Set([
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
+])
 
 export const oauthMetadata = OAuthMetadataSchema.parse({
   issuer: baseUrl.toString(),
@@ -98,7 +104,9 @@ export const parseRequestedScopes = (scope?: string | null) => {
 }
 
 export const supportsRequestedScopes = (scope?: string | null) =>
-  parseRequestedScopes(scope).every((item) => mcpScopeSet.has(item))
+  parseRequestedScopes(scope).every(
+    (item) => mcpScopeSet.has(item) || toleratedIdentityScopes.has(item)
+  )
 
 export const verifyAccessToken = (
   _req: Request,
