@@ -9,21 +9,6 @@ import { verifyToken } from '@/server/tokens'
 
 export const MCP_SCOPE = 'mcp'
 
-const loopbackHosts = new Set(['localhost', '127.0.0.1'])
-const scopeSplit = /\s+/
-
-export const normalizeRedirectUri = (value: string) => {
-  try {
-    const url = new URL(value)
-    if (loopbackHosts.has(url.hostname)) {
-      url.hostname = 'localhost'
-    }
-    return url.toString()
-  } catch {
-    return value
-  }
-}
-
 export const parseDynamicClientRegistration = (body: unknown) => {
   const parsed = OAuthClientMetadataSchema.safeParse(body)
 
@@ -40,23 +25,11 @@ export const parseDynamicClientRegistration = (body: unknown) => {
     data: {
       ...parsed.data,
       grant_types: ['authorization_code'],
-      redirect_uris: parsed.data.redirect_uris.map(normalizeRedirectUri),
       response_types: ['code'],
       token_endpoint_auth_method: 'none' as const,
     },
     success: true as const,
   }
-}
-
-export const supportsRequestedScopes = (scope?: string | null) => {
-  if (!scope) {
-    return true
-  }
-  const requested = scope
-    .split(scopeSplit)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return requested.every((s) => s === MCP_SCOPE)
 }
 
 export const verifyAccessToken = (

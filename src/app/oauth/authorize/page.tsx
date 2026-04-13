@@ -4,10 +4,6 @@ import { Button } from '@/components/ui/button'
 import { env } from '@/env'
 import { getSession } from '@/server/auth'
 import { createCode, getClient } from '@/server/auth/oauth'
-import {
-  normalizeRedirectUri,
-  supportsRequestedScopes,
-} from '@/server/mcp-auth'
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>
@@ -22,10 +18,6 @@ export default async function AuthorizePage({ searchParams }: Props) {
   const codeChallengeMethod = sp.code_challenge_method
   const state = sp.state ?? ''
   const responseType = sp.response_type
-  const requestedScope = sp.scope
-  const normalizedRedirectUri = redirectUri
-    ? normalizeRedirectUri(redirectUri)
-    : undefined
 
   if (
     !(clientId && redirectUri && codeChallenge) ||
@@ -41,16 +33,7 @@ export default async function AuthorizePage({ searchParams }: Props) {
     return <ErrorPage message='Unknown client.' />
   }
 
-  if (!supportsRequestedScopes(requestedScope)) {
-    return <ErrorPage message='Requested scope is not supported.' />
-  }
-
-  if (
-    !(
-      normalizedRedirectUri &&
-      client.redirectUris.includes(normalizedRedirectUri)
-    )
-  ) {
+  if (!client.redirectUris.includes(redirectUri)) {
     return <ErrorPage message='Redirect URI not registered for this client.' />
   }
 
@@ -71,20 +54,18 @@ export default async function AuthorizePage({ searchParams }: Props) {
   async function authorize() {
     'use server'
 
-    if (
-      !(session && clientId && normalizedRedirectUri && codeChallenge && state)
-    ) {
+    if (!(session && clientId && redirectUri && codeChallenge && state)) {
       return
     }
 
     const code = await createCode({
       clientId,
       userId: session.user.id,
-      redirectUri: normalizedRedirectUri,
+      redirectUri,
       codeChallenge,
     })
 
-    const dest = new URL(normalizedRedirectUri)
+    const dest = new URL(redirectUri)
     dest.searchParams.set('code', code)
     dest.searchParams.set('state', state)
     redirect(dest.toString() as never)
@@ -93,11 +74,11 @@ export default async function AuthorizePage({ searchParams }: Props) {
   async function deny() {
     'use server'
 
-    if (!(normalizedRedirectUri && state)) {
+    if (!(redirectUri && state)) {
       return
     }
 
-    const dest = new URL(normalizedRedirectUri)
+    const dest = new URL(redirectUri)
     dest.searchParams.set('error', 'access_denied')
     dest.searchParams.set('state', state)
     redirect(dest.toString() as never)

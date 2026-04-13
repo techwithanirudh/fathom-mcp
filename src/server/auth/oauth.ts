@@ -6,7 +6,6 @@ import { and, eq, gt, isNull } from 'drizzle-orm'
 
 import { db } from '../db'
 import { oauthClients, oauthCodes } from '../db/schema'
-import { normalizeRedirectUri } from '../mcp-auth'
 
 const CODE_TTL_MS = 10 * 60 * 1000
 
@@ -22,7 +21,7 @@ export const registerClient = async (input: {
     id,
     name: input.name ?? null,
     uri: input.uri ?? null,
-    redirectUris: JSON.stringify(input.redirectUris.map(normalizeRedirectUri)),
+    redirectUris: JSON.stringify(input.redirectUris),
     createdAt,
   })
 
@@ -66,7 +65,7 @@ export const createCode = async (params: {
     id: code,
     clientId: params.clientId,
     userId: params.userId,
-    redirectUri: normalizeRedirectUri(params.redirectUri),
+    redirectUri: params.redirectUri,
     codeChallenge: params.codeChallenge,
     expiresAt: new Date(Date.now() + CODE_TTL_MS),
   })
@@ -80,8 +79,6 @@ export const redeemCode = async (params: {
   redirectUri: string
   codeVerifier: string
 }) => {
-  const redirectUri = normalizeRedirectUri(params.redirectUri)
-
   const [row] = await db
     .select()
     .from(oauthCodes)
@@ -89,7 +86,7 @@ export const redeemCode = async (params: {
       and(
         eq(oauthCodes.id, params.code),
         eq(oauthCodes.clientId, params.clientId),
-        eq(oauthCodes.redirectUri, redirectUri),
+        eq(oauthCodes.redirectUri, params.redirectUri),
         isNull(oauthCodes.usedAt),
         gt(oauthCodes.expiresAt, new Date())
       )
