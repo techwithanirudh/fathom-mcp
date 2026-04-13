@@ -23,10 +23,22 @@ export function getTranscriptTool(server: McpServer) {
           .number()
           .int()
           .describe('The recording ID from list_meetings.'),
+        format: z
+          .enum(['text', 'json'])
+          .optional()
+          .default('text')
+          .describe(
+            'Output format. "text" (default) returns a readable Speaker (HH:MM:SS): line format. "json" returns the raw structured array.'
+          ),
+        include_timestamps: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Include timestamps in text format. Default true.'),
       },
       outputSchema: transcriptOutputSchema,
     },
-    async ({ recording_id }, { authInfo }) => {
+    async ({ recording_id, format, include_timestamps }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string | undefined
       if (!userId) {
         return err('Unauthorized.')
@@ -35,8 +47,20 @@ export function getTranscriptTool(server: McpServer) {
       try {
         const transcript = await fetchTranscript(userId, recording_id)
         const result: TranscriptResult = { transcript }
+
+        const text =
+          format === 'json'
+            ? JSON.stringify(result, null, 2)
+            : transcript
+                .map((t) =>
+                  include_timestamps
+                    ? `${t.speaker.displayName} (${t.timestamp}): ${t.text}`
+                    : `${t.speaker.displayName}: ${t.text}`
+                )
+                .join('\n')
+
         return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text', text }],
           structuredContent: result as unknown as Record<string, unknown>,
         }
       } catch (e) {
