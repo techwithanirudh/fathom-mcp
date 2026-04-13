@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 const figtree = Figtree({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  description: 'Self-hosted Fathom remote MCP server',
+  description: 'Connect your Fathom account to AI assistants via MCP.',
   title: 'Fathom MCP',
 }
 
