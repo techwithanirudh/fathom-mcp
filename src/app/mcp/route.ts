@@ -2,13 +2,11 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 
 import { env } from '@/env'
 import { verifyToken } from '@/server/tokens'
-import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import { registerTools } from './tools'
 
 const mcpHandler = createMcpHandler(
   (server) => {
-    registerPrompts(server)
     registerResources(server)
     registerTools(server)
   },

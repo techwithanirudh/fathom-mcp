@@ -43,7 +43,7 @@ export function listTeamsTool(server: McpServer) {
             break
           }
           teams = page.result.items.map((t) => ({
-            createdAt: t.createdAt,
+            createdAt: t.createdAt.toISOString(),
             name: t.name,
           }))
           nextCursor = page.result.nextCursor

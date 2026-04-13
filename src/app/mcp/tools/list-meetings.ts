@@ -87,10 +87,10 @@ export function listMeetingsTool(server: McpServer) {
             })),
             meetingTitle: m.meetingTitle,
             recordedBy: m.recordedBy.name,
-            recordingEnd: m.recordingEndTime,
-            recordingStart: m.recordingStartTime,
-            scheduledEnd: m.scheduledEndTime,
-            scheduledStart: m.scheduledStartTime,
+            recordingEnd: m.recordingEndTime.toISOString(),
+            recordingStart: m.recordingStartTime.toISOString(),
+            scheduledEnd: m.scheduledEndTime.toISOString(),
+            scheduledStart: m.scheduledStartTime.toISOString(),
             shareUrl: m.shareUrl,
             summary: m.defaultSummary
               ? {
