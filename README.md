@@ -1,91 +1,82 @@
-# Fathom MCP Server
+# Fathom MCP
 
-An MCP server that gives Claude (and other MCP clients) access to your [Fathom](https://fathom.video) meeting recordings, transcripts, summaries, and team data.
+This project exposes Fathom meeting data through an MCP server built with Next.js 16 and `mcp-handler`.
 
-Built with Next.js 16 and [`mcp-handler`](https://www.npmjs.com/package/mcp-handler).
+The main use case is simple: connect a Fathom account once, then let an MCP client read meeting lists, transcripts, summaries, and team data through a single endpoint.
 
-## Features
+## What it exposes
 
-- **OAuth 2.1** with PKCE — clients like Claude Desktop authenticate without manual token setup
-- **Bearer token auth** — create named tokens in the dashboard for API/script use
-- **5 tools** — list meetings, get transcripts, get summaries, list teams and members
-- **2 resources** — meeting transcripts and summaries accessible via `fathom://meeting/{id}/transcript` and `fathom://meeting/{id}/summary`
-- **3 prompts** — pre-built queries for recent meetings, action items, and meeting briefs
-- **Structured output** — all tools return typed `structuredContent` alongside text
+The server currently registers five tools:
 
-## Tools
+- `list_meetings`
+- `get_transcript`
+- `get_summary`
+- `list_teams`
+- `list_team_members`
 
-| Tool | Description |
-|------|-------------|
-| `list_meetings` | List recordings with optional transcript, summary, and action item inclusion |
-| `get_transcript` | Full speaker-labelled transcript for a recording |
-| `get_summary` | AI-generated summary for a recording |
-| `list_teams` | List workspace teams |
-| `list_team_members` | List members of a team |
+It also exposes transcript and summary resources under `fathom://meeting/{id}/...`.
 
-## Prompts
+## Local setup
 
-| Prompt | Args | Description |
-|--------|------|-------------|
-| `recent_meetings` | `count?` | Summarise your most recent meetings |
-| `action_items` | `assignee?` | List open action items, optionally filtered by person |
-| `meeting_brief` | `recording_id` | Full brief for a single meeting (summary, decisions, action items, quotes) |
+Install dependencies:
 
-## Setup
+```sh
+bun install
+```
 
-### 1. Environment variables
+Set the required environment variables:
 
 ```env
 DATABASE_URL=postgresql://...
-APP_ENCRYPTION_KEY=          # 32 bytes, base64-encoded
-NEXT_PUBLIC_BASE_URL=        # e.g. https://your-tunnel.trycloudflare.com
+APP_ENCRYPTION_KEY=          # base64-encoded 32-byte key
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 FATHOM_CLIENT_ID=
 FATHOM_CLIENT_SECRET=
 ```
 
-### 2. Database
+Prepare the database:
 
 ```sh
 bun run db:push
 ```
 
-### 3. Fathom OAuth app
+In the Fathom developer settings, register this redirect URI:
 
-In your Fathom developer settings, register a redirect URI:
-
-```
+```text
 {NEXT_PUBLIC_BASE_URL}/api/integrations/fathom/callback
 ```
 
-### 4. Run
+Start the app:
 
 ```sh
-bun install
 bun run dev
 ```
 
-## MCP endpoint
+## Using the server
 
-```
+The MCP endpoint is:
+
+```text
 {NEXT_PUBLIC_BASE_URL}/mcp
 ```
 
-Point your MCP client here. The server supports both OAuth 2.1 (for clients like Claude Desktop) and bearer token auth.
+Authentication works in two ways:
 
-### Bearer token
+- OAuth 2.1 with PKCE for MCP clients that support the full flow
+- Bearer tokens created from the app dashboard after signing in and connecting Fathom
 
-Sign in at `{NEXT_PUBLIC_BASE_URL}`, connect Fathom, then create a token on the dashboard. Pass it as:
+For bearer-token access, send:
 
-```
+```text
 Authorization: Bearer mcp_...
 ```
 
-## Development
+## Development notes
 
-```sh
-bun run dev          # dev server
-bun run build        # production build
-bun run typecheck    # type checking
-bun run check:write  # lint + format
-bun run check:unsafe # lint + format (unsafe fixes)
-```
+- App code lives in `src/`
+- The MCP route is `src/app/mcp/route.ts`
+- Safe formatting and lint fixes: `bun run check:write`
+- Type checking: `bun run typecheck`
+- Spelling: `bun run check:spelling`
+
+CI runs typecheck, lint, and spelling checks on pull requests to `main`.
