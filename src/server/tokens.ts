@@ -1,11 +1,5 @@
-/**
- * MCP bearer token management.
- *
- * Raw tokens are never stored — only their SHA-256 hex hash.
- * Tokens are prefixed with "mcp_" for easy identification.
- */
-
 import { randomUUID } from 'node:crypto'
+
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import { sha256 } from '@oslojs/crypto/sha2'
 import { encodeBase64urlNoPadding, encodeHexLowerCase } from '@oslojs/encoding'
@@ -23,10 +17,6 @@ const randomToken = () => {
   return `mcp_${encodeBase64urlNoPadding(bytes)}`
 }
 
-/**
- * Creates a new MCP bearer token for a user.
- * Returns the raw token (shown once — store it).
- */
 export const createToken = async (
   userId: string,
   label: string,
@@ -45,10 +35,6 @@ export const createToken = async (
   return raw
 }
 
-/**
- * Verifies a bearer token and returns AuthInfo if valid.
- * Also updates lastUsedAt on each successful verification.
- */
 export const verifyToken = async (
   raw: string
 ): Promise<AuthInfo | undefined> => {

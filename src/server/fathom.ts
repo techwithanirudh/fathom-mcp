@@ -1,10 +1,3 @@
-/**
- * Fathom OAuth client.
- *
- * This app connects to Fathom on behalf of the user (server-side OAuth).
- * Tokens are encrypted and stored in the database via DbTokenStore.
- */
-
 import { randomUUID } from 'node:crypto'
 
 import { eq } from 'drizzle-orm'
@@ -15,10 +8,6 @@ import { env } from '@/env'
 import { decrypt, encrypt } from './auth/crypto'
 import { db } from './db'
 import { fathomTokens, users } from './db/schema'
-
-// ---------------------------------------------------------------------------
-// Internal token store backed by the database
-// ---------------------------------------------------------------------------
 
 class DbTokenStore {
   private readonly userId: string
@@ -58,17 +47,12 @@ class DbTokenStore {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public helpers
-// ---------------------------------------------------------------------------
-
 const callbackUrl = () =>
   new URL(
     '/api/integrations/fathom/callback',
     env.NEXT_PUBLIC_BASE_URL
   ).toString()
 
-/** URL to redirect the user to for Fathom OAuth consent. */
 export const getFathomAuthUrl = (state: string) =>
   Fathom.getAuthorizationUrl({
     clientId: env.FATHOM_CLIENT_ID,
@@ -77,10 +61,6 @@ export const getFathomAuthUrl = (state: string) =>
     state,
   })
 
-/**
- * Create a Fathom SDK client that automatically refreshes tokens via the DB
- * store. Use this for all Fathom API calls on behalf of a connected user.
- */
 export const createFathomClient = (userId: string) =>
   new Fathom({
     security: Fathom.withAuthorization({
@@ -92,10 +72,6 @@ export const createFathomClient = (userId: string) =>
     }),
   })
 
-/**
- * Called during the OAuth callback. Creates a temporary Fathom client that
- * will exchange the authorization code for tokens on the first API call.
- */
 export const initFathomOAuth = (code: string) => {
   const tempStore = Fathom.newTokenStore()
   const client = new Fathom({
@@ -110,7 +86,6 @@ export const initFathomOAuth = (code: string) => {
   return { client, tempStore }
 }
 
-/** Persist the tokens from a freshly-completed OAuth flow. */
 export const saveFathomTokens = async (
   userId: string,
   tempStore: ReturnType<typeof Fathom.newTokenStore>,
@@ -147,33 +122,6 @@ export const saveFathomTokens = async (
     })
 }
 
-/**
- * Returns the raw (decrypted) Fathom access token for a user.
- * Used for direct fetch() calls that bypass the SDK (e.g. transcript endpoint).
- */
-export const getFathomToken = async (userId: string) => {
-  const [row] = await db
-    .select()
-    .from(fathomTokens)
-    .where(eq(fathomTokens.userId, userId))
-    .limit(1)
-
-  if (!row) {
-    throw new Error('No Fathom connection found for this user.')
-  }
-
-  return decrypt(row.accessTokenEnc)
-}
-
-// ---------------------------------------------------------------------------
-// Workspace inference from Fathom meetings
-// ---------------------------------------------------------------------------
-
-/**
- * Looks at the first page of meetings and identifies the most-frequent
- * recorder. This lets us give the workspace a human name and detect
- * returning users on reconnect.
- */
 export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
   const freq = new Map<string, { count: number; email: string; name: string }>()
 
@@ -197,7 +145,6 @@ export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
   return { email: top.email, workspaceName: `${first}'s workspace` }
 }
 
-/** Find an existing user by their inferred recorder email. */
 export const findUserByEmail = async (email: string) => {
   const [user] = await db
     .select()

@@ -1,10 +1,3 @@
-/**
- * Session management for the management UI.
- *
- * Sessions are cookie-based. The cookie holds a random token; the database
- * holds its SHA-256 hash (so a compromised DB doesn't leak valid sessions).
- */
-
 import { randomUUID } from 'node:crypto'
 
 import { sha256 } from '@oslojs/crypto/sha2'
@@ -17,7 +10,7 @@ import { db } from '../db'
 import { sessions, users } from '../db/schema'
 
 const COOKIE_NAME = 'mcp.session'
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 const hashToken = (token: string) =>
   encodeHexLowerCase(sha256(new TextEncoder().encode(token)))
@@ -52,19 +45,18 @@ export const createSession = async (userId: string) => {
 export const clearSession = async () => {
   const jar = await cookies()
   const token = jar.get(COOKIE_NAME)?.value
+
   if (token) {
     await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)))
-  } else {
-    // nothing to delete from DB
   }
 
   jar.delete(COOKIE_NAME)
 }
 
-// cache() deduplicates calls within a single request.
 export const getSession = cache(async () => {
   const jar = await cookies()
   const token = jar.get(COOKIE_NAME)?.value
+
   if (!token) {
     return null
   }

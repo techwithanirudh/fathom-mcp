@@ -8,14 +8,17 @@ import { verifyToken } from '@/server/tokens'
 
 const mcpHandler = createMcpHandler(
   (server) => {
-    server.tool(
+    server.registerTool(
       'list_meetings',
-      'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination.',
       {
-        cursor: z
-          .string()
-          .optional()
-          .describe('Pagination cursor from a previous response.'),
+        description:
+          'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination.',
+        inputSchema: {
+          cursor: z
+            .string()
+            .optional()
+            .describe('Pagination cursor from a previous response.'),
+        },
       },
       async ({ cursor }, { authInfo }) => {
         const userId = authInfo?.extra?.userId as string | undefined
@@ -69,14 +72,16 @@ const mcpHandler = createMcpHandler(
       }
     )
 
-    server.tool(
+    server.registerTool(
       'get_transcript',
-      'Get the full transcript of a Fathom meeting.',
       {
-        recording_id: z
-          .number()
-          .int()
-          .describe('The recording ID from list_meetings.'),
+        description: 'Get the full transcript of a Fathom meeting.',
+        inputSchema: {
+          recording_id: z
+            .number()
+            .int()
+            .describe('The recording ID from list_meetings.'),
+        },
       },
       async ({ recording_id }, { authInfo }) => {
         const userId = authInfo?.extra?.userId as string | undefined
@@ -86,17 +91,14 @@ const mcpHandler = createMcpHandler(
         }
 
         const client = createFathomClient(userId)
-        // destinationUrl is marked required in SDK types but optional in the API —
-        // omitting it makes the endpoint return data synchronously.
+        // destinationUrl is marked required in SDK types but optional in the API
         const req = {
           recordingId: recording_id,
         } as GetRecordingTranscriptRequest
         const res = await client.getRecordingTranscript(req)
 
         if (!res) {
-          return {
-            content: [{ type: 'text', text: 'Transcript not found.' }],
-          }
+          return { content: [{ type: 'text', text: 'Transcript not found.' }] }
         }
 
         return {
@@ -105,14 +107,16 @@ const mcpHandler = createMcpHandler(
       }
     )
 
-    server.tool(
+    server.registerTool(
       'get_summary',
-      'Get the AI-generated summary of a Fathom meeting.',
       {
-        recording_id: z
-          .number()
-          .int()
-          .describe('The recording ID from list_meetings.'),
+        description: 'Get the AI-generated summary of a Fathom meeting.',
+        inputSchema: {
+          recording_id: z
+            .number()
+            .int()
+            .describe('The recording ID from list_meetings.'),
+        },
       },
       async ({ recording_id }, { authInfo }) => {
         const userId = authInfo?.extra?.userId as string | undefined
@@ -136,9 +140,7 @@ const mcpHandler = createMcpHandler(
       }
     )
   },
-  {
-    serverInfo: { name: 'fathom-mcp', version: '1.0.0' },
-  }
+  { serverInfo: { name: 'fathom-mcp', version: '1.0.0' } }
 )
 
 const handler = withMcpAuth(

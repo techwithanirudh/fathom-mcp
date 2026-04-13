@@ -1,15 +1,3 @@
-/**
- * OAuth 2.1 Authorization Server logic.
- *
- * This app acts as an OAuth AS for MCP clients. The flow is:
- *   1. Client registers via POST /api/oauth/register  →  gets a client_id
- *   2. Client redirects user to GET /oauth/authorize  →  user consents
- *   3. App redirects back with ?code=...             →  authorization code
- *   4. Client exchanges code at POST /api/oauth/token →  MCP bearer token
- *
- * PKCE (S256) is always required — there are no client secrets.
- */
-
 import { randomUUID } from 'node:crypto'
 
 import { sha256 } from '@oslojs/crypto/sha2'
@@ -19,11 +7,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm'
 import { db } from '../db'
 import { oauthClients, oauthCodes } from '../db/schema'
 
-const CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
-
-// ---------------------------------------------------------------------------
-// Clients
-// ---------------------------------------------------------------------------
+const CODE_TTL_MS = 10 * 60 * 1000
 
 export const registerClient = async (input: {
   name?: string
@@ -61,10 +45,6 @@ export const getClient = async (clientId: string) => {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Authorization codes
-// ---------------------------------------------------------------------------
-
 const randomCode = () => {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
@@ -91,11 +71,6 @@ export const createCode = async (params: {
   return code
 }
 
-/**
- * Validates and redeems an authorization code.
- * Returns the userId and marks the code as used (prevents replay).
- * Returns null if the code is invalid, expired, already used, or PKCE fails.
- */
 export const redeemCode = async (params: {
   code: string
   clientId: string
@@ -120,13 +95,11 @@ export const redeemCode = async (params: {
     return null
   }
 
-  // Mark used immediately — subsequent calls with the same code will fail.
   await db
     .update(oauthCodes)
     .set({ usedAt: new Date() })
     .where(eq(oauthCodes.id, params.code))
 
-  // Verify PKCE: code_challenge must equal BASE64URL(SHA256(code_verifier))
   const expected = encodeBase64urlNoPadding(
     sha256(new TextEncoder().encode(params.codeVerifier))
   )

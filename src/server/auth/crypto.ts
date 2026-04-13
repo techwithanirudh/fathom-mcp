@@ -1,9 +1,3 @@
-/**
- * AES-256-GCM encryption for secrets stored in the database.
- *
- * Format: base64url(iv) . base64url(authTag) . base64url(ciphertext)
- */
-
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
 import { env } from '@/env'

@@ -22,17 +22,6 @@ interface PendingOAuth {
   state: string
 }
 
-/**
- * Fathom OAuth callback.
- *
- * 1. Validates state cookie (CSRF).
- * 2. Exchanges code for tokens.
- * 3. Infers workspace from meetings.
- * 4. Creates or reuses a user record.
- * 5. If there are pending MCP OAuth params (from /oauth/authorize),
- *    completes that flow by creating an authorization code and redirecting.
- * 6. Otherwise, redirects to /tokens.
- */
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const code = url.searchParams.get('code')
@@ -50,10 +39,8 @@ export async function GET(req: Request) {
     redirect('/?error=invalid_state')
   }
 
-  // Exchange code for Fathom tokens.
   const { client, tempStore } = initFathomOAuth(code)
 
-  // Fetch first page of meetings to infer workspace identity.
   const iter = await client.listMeetings()
   let meetings: Awaited<
     ReturnType<typeof client.listMeetings>
@@ -63,13 +50,11 @@ export async function GET(req: Request) {
     if (page) {
       meetings = page.result.items
     }
-
     break
   }
 
   const { email, workspaceName } = inferWorkspaceFromMeetings(meetings)
 
-  // Reuse existing user if we've seen this email before.
   let user = email ? await findUserByEmail(email) : null
 
   if (user) {
@@ -91,7 +76,6 @@ export async function GET(req: Request) {
 
   jar.delete('oauth_pending')
 
-  // If there was a pending MCP OAuth flow, complete it.
   if (pendingOAuth) {
     let params: PendingOAuth
 

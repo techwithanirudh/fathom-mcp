@@ -1,6 +1,6 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { env } from '@/env'
 import { getSession } from '@/server/auth'
 import { createCode, getClient } from '@/server/auth/oauth'
 
@@ -18,7 +18,6 @@ export default async function AuthorizePage({ searchParams }: Props) {
   const state = sp.state ?? ''
   const responseType = sp.response_type
 
-  // Basic parameter validation.
   if (
     !(clientId && redirectUri && codeChallenge) ||
     codeChallengeMethod !== 'S256' ||
@@ -39,25 +38,18 @@ export default async function AuthorizePage({ searchParams }: Props) {
 
   const session = await getSession()
 
-  // If the user is not connected to Fathom, save the OAuth params and send
-  // them through Fathom OAuth first. The callback will resume this flow.
   if (!session) {
-    const jar = await cookies()
-    jar.set(
-      'oauth_pending',
-      JSON.stringify({ clientId, redirectUri, codeChallenge, state }),
-      {
-        httpOnly: true,
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 10,
-      }
+    const connectUrl = new URL(
+      '/api/integrations/fathom/connect',
+      env.NEXT_PUBLIC_BASE_URL
     )
-    redirect('/api/integrations/fathom/connect')
+    connectUrl.searchParams.set('oauth_client_id', clientId)
+    connectUrl.searchParams.set('oauth_redirect_uri', redirectUri)
+    connectUrl.searchParams.set('oauth_code_challenge', codeChallenge)
+    connectUrl.searchParams.set('oauth_state', state)
+    redirect(connectUrl.pathname + connectUrl.search)
   }
 
-  // Server action: user clicks "Authorize".
   async function authorize() {
     'use server'
 
@@ -78,7 +70,6 @@ export default async function AuthorizePage({ searchParams }: Props) {
     redirect(dest.toString())
   }
 
-  // Server action: user clicks "Deny".
   async function deny() {
     'use server'
 
