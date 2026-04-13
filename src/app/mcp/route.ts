@@ -1,7 +1,7 @@
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 
 import { env } from '@/env'
-import { verifyToken } from '@/server/tokens'
+import { resourceMetadataPath, verifyAccessToken } from '@/server/mcp-auth'
 import { registerResources } from './resources'
 import { registerGetSummary } from './tools/get-summary'
 import { registerGetTranscript } from './tools/get-transcript'
@@ -23,9 +23,9 @@ const mcpHandler = createMcpHandler(
     instructions: `You are connected to Fathom, an AI meeting recorder. Use these tools to answer questions about meetings, transcripts, summaries, and team members.
 
 Tool guidance:
-- list_meetings: Start here. Use cursor for pagination. Pass include_transcript=true to get transcripts inline — prefer this over calling get_transcript separately when you need transcripts for multiple meetings.
-- get_transcript: Use when you need a single meeting's transcript by recording ID. It pages through recordings to find the match, so list_meetings with include_transcript=true is more efficient for recent meetings.
-- get_summary: Fetches the AI-generated meeting summary for a single recording. Pass include_summary=true to list_meetings instead if you need summaries for multiple meetings.
+- list_meetings: Start here. Use cursor for pagination to find recordings and IDs.
+- get_transcript: Use when you need a single meeting's transcript by recording ID.
+- get_summary: Fetch the AI-generated summary for a single recording by recording ID.
 - list_teams / list_team_members: Use to understand workspace structure or filter meetings by team.
 
 General tips:
@@ -36,15 +36,11 @@ General tips:
   }
 )
 
-const handler = withMcpAuth(
-  mcpHandler,
-  (_req, bearerToken) => {
-    if (!bearerToken) {
-      return undefined
-    }
-    return verifyToken(bearerToken)
-  },
-  { required: true, resourceUrl: `${env.NEXT_PUBLIC_BASE_URL}/mcp` }
-)
+const handler = withMcpAuth(mcpHandler, verifyAccessToken, {
+  required: true,
+  resourceUrl: env.NEXT_PUBLIC_BASE_URL,
+  resourceMetadataPath,
+  requiredScopes: ['mcp'],
+})
 
 export { handler as GET, handler as POST, handler as DELETE }

@@ -153,3 +153,128 @@ export const findUserByEmail = async (email: string) => {
     .limit(1)
   return user ?? null
 }
+
+const OAUTH_TOKEN_URL = 'https://fathom.video/external/v1/oauth2/token'
+const ACCESS_TOKEN_TOLERANCE_SECONDS = 5 * 60
+
+const getStoredTokens = async (userId: string) => {
+  const [row] = await db
+    .select()
+    .from(fathomTokens)
+    .where(eq(fathomTokens.userId, userId))
+    .limit(1)
+
+  if (!row) {
+    throw new Error('No stored Fathom OAuth tokens found for this user.')
+  }
+
+  return row
+}
+
+const persistRefreshedTokens = async (params: {
+  accessToken: string
+  expiresIn: number
+  refreshToken: string
+  userId: string
+}) => {
+  await db
+    .update(fathomTokens)
+    .set({
+      accessTokenEnc: encrypt(params.accessToken),
+      refreshTokenEnc: encrypt(params.refreshToken),
+      accessTokenExpiresAt: new Date(
+        (Date.now() / 1000 +
+          params.expiresIn -
+          ACCESS_TOKEN_TOLERANCE_SECONDS) *
+          1000
+      ),
+      updatedAt: new Date(),
+    })
+    .where(eq(fathomTokens.userId, params.userId))
+}
+
+export const getValidAccessToken = async (userId: string) => {
+  const row = await getStoredTokens(userId)
+
+  if (row.accessTokenExpiresAt.getTime() > Date.now()) {
+    return decrypt(row.accessTokenEnc)
+  }
+
+  const response = await fetch(OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: env.FATHOM_CLIENT_ID,
+      client_secret: env.FATHOM_CLIENT_SECRET,
+      refresh_token: decrypt(row.refreshTokenEnc),
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to refresh Fathom OAuth token (${response.status}).`
+    )
+  }
+
+  const json = (await response.json()) as {
+    access_token?: string
+    expires_in?: number
+    refresh_token?: string
+  }
+
+  if (!(json.access_token && json.refresh_token && json.expires_in)) {
+    throw new Error('Fathom token refresh returned an invalid payload.')
+  }
+
+  await persistRefreshedTokens({
+    accessToken: json.access_token,
+    expiresIn: json.expires_in,
+    refreshToken: json.refresh_token,
+    userId,
+  })
+
+  return json.access_token
+}
+
+export const getRecordingTranscript = async (
+  userId: string,
+  recordingId: number
+) => {
+  const accessToken = await getValidAccessToken(userId)
+  const url = new URL(
+    `/external/v1/recordings/${recordingId}/transcript`,
+    'https://api.fathom.ai'
+  )
+
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (response.status === 404) {
+    return null
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch transcript for recording ${recordingId} (${response.status}).`
+    )
+  }
+
+  return (await response.json()) as {
+    transcript?: Array<{
+      speaker: {
+        displayName: string
+        matchedCalendarInviteeEmail?: string | null
+      }
+      text: string
+      timestamp: string
+    }>
+  }
+}

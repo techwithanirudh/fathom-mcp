@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 
-import { createFathomClient } from '@/server/fathom'
+import { createFathomClient, getRecordingTranscript } from '@/server/fathom'
 
 export function registerMeetingTranscript(server: McpServer) {
   server.registerResource(
@@ -52,40 +52,25 @@ export function registerMeetingTranscript(server: McpServer) {
       }
 
       const recordingId = Number(variables.recordingId)
-      const client = createFathomClient(userId)
-      const iter = await client.listMeetings({ includeTranscript: true })
+      const raw = await getRecordingTranscript(userId, recordingId)
 
-      for await (const page of iter) {
-        if (!page) {
-          break
-        }
-
-        const match = page.result.items.find(
-          (m) => m.recordingId === recordingId
-        )
-        if (match) {
-          const transcript = (match.transcript ?? []).map((t) => ({
-            speaker: {
-              displayName: t.speaker.displayName,
-              matchedCalendarInviteeEmail:
-                t.speaker.matchedCalendarInviteeEmail,
+      if (raw?.transcript) {
+        const transcript = raw.transcript.map((t) => ({
+          speaker: {
+            displayName: t.speaker.displayName,
+            matchedCalendarInviteeEmail: t.speaker.matchedCalendarInviteeEmail,
+          },
+          text: t.text,
+          timestamp: t.timestamp,
+        }))
+        return {
+          contents: [
+            {
+              uri: uri.toString(),
+              mimeType: 'application/json',
+              text: JSON.stringify({ transcript }, null, 2),
             },
-            text: t.text,
-            timestamp: t.timestamp,
-          }))
-          return {
-            contents: [
-              {
-                uri: uri.toString(),
-                mimeType: 'application/json',
-                text: JSON.stringify({ transcript }, null, 2),
-              },
-            ],
-          }
-        }
-
-        if (!page.result.nextCursor) {
-          break
+          ],
         }
       }
 

@@ -17,7 +17,7 @@ export function registerListMeetings(server: McpServer) {
         readOnlyHint: true,
       },
       description:
-        'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination. Optionally include transcripts, summaries, and action items.',
+        'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination. Use get_summary or get_transcript for individual recording content.',
       inputSchema: {
         cursor: z
           .string()
@@ -27,21 +27,10 @@ export function registerListMeetings(server: McpServer) {
           .boolean()
           .optional()
           .describe('Include action items for each meeting.'),
-        include_summary: z
-          .boolean()
-          .optional()
-          .describe('Include AI-generated summary for each meeting.'),
-        include_transcript: z
-          .boolean()
-          .optional()
-          .describe('Include full transcript for each meeting.'),
       },
       outputSchema: meetingListOutputSchema,
     },
-    async (
-      { cursor, include_action_items, include_summary, include_transcript },
-      { authInfo }
-    ) => {
+    async ({ cursor, include_action_items }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string | undefined
       if (!userId) {
         return err('Unauthorized.')
@@ -52,8 +41,6 @@ export function registerListMeetings(server: McpServer) {
         const iter = await client.listMeetings({
           cursor,
           includeActionItems: include_action_items,
-          includeSummary: include_summary,
-          includeTranscript: include_transcript,
         })
 
         let meetings: MeetingListItem[] = []
@@ -92,23 +79,7 @@ export function registerListMeetings(server: McpServer) {
             scheduledEnd: m.scheduledEndTime,
             scheduledStart: m.scheduledStartTime,
             shareUrl: m.shareUrl,
-            summary: m.defaultSummary
-              ? {
-                  markdownFormatted: m.defaultSummary.markdownFormatted,
-                  templateName: m.defaultSummary.templateName,
-                }
-              : undefined,
             title: m.title,
-            transcript:
-              m.transcript?.map((t) => ({
-                speaker: {
-                  displayName: t.speaker.displayName,
-                  matchedCalendarInviteeEmail:
-                    t.speaker.matchedCalendarInviteeEmail,
-                },
-                text: t.text,
-                timestamp: t.timestamp,
-              })) ?? undefined,
             url: m.url,
           }))
           nextCursor = page.result.nextCursor

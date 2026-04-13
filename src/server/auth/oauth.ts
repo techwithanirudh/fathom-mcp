@@ -6,6 +6,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm'
 
 import { db } from '../db'
 import { oauthClients, oauthCodes } from '../db/schema'
+import { normalizeRedirectUri } from '../mcp-auth'
 
 const CODE_TTL_MS = 10 * 60 * 1000
 
@@ -20,7 +21,7 @@ export const registerClient = async (input: {
     id,
     name: input.name ?? null,
     uri: input.uri ?? null,
-    redirectUris: JSON.stringify(input.redirectUris),
+    redirectUris: JSON.stringify(input.redirectUris.map(normalizeRedirectUri)),
   })
 
   return id
@@ -63,7 +64,7 @@ export const createCode = async (params: {
     id: code,
     clientId: params.clientId,
     userId: params.userId,
-    redirectUri: params.redirectUri,
+    redirectUri: normalizeRedirectUri(params.redirectUri),
     codeChallenge: params.codeChallenge,
     expiresAt: new Date(Date.now() + CODE_TTL_MS),
   })
@@ -77,6 +78,8 @@ export const redeemCode = async (params: {
   redirectUri: string
   codeVerifier: string
 }) => {
+  const redirectUri = normalizeRedirectUri(params.redirectUri)
+
   const [row] = await db
     .select()
     .from(oauthCodes)
@@ -84,7 +87,7 @@ export const redeemCode = async (params: {
       and(
         eq(oauthCodes.id, params.code),
         eq(oauthCodes.clientId, params.clientId),
-        eq(oauthCodes.redirectUri, params.redirectUri),
+        eq(oauthCodes.redirectUri, redirectUri),
         isNull(oauthCodes.usedAt),
         gt(oauthCodes.expiresAt, new Date())
       )
@@ -95,11 +98,6 @@ export const redeemCode = async (params: {
     return null
   }
 
-  await db
-    .update(oauthCodes)
-    .set({ usedAt: new Date() })
-    .where(eq(oauthCodes.id, params.code))
-
   const expected = encodeBase64urlNoPadding(
     sha256(new TextEncoder().encode(params.codeVerifier))
   )
@@ -107,6 +105,11 @@ export const redeemCode = async (params: {
   if (expected !== row.codeChallenge) {
     return null
   }
+
+  await db
+    .update(oauthCodes)
+    .set({ usedAt: new Date() })
+    .where(eq(oauthCodes.id, params.code))
 
   return row.userId
 }

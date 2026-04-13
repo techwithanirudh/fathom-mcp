@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { env } from '@/env'
 import { getSession } from '@/server/auth'
 import { createCode, getClient } from '@/server/auth/oauth'
+import { normalizeRedirectUri } from '@/server/mcp-auth'
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>
@@ -17,6 +18,9 @@ export default async function AuthorizePage({ searchParams }: Props) {
   const codeChallengeMethod = sp.code_challenge_method
   const state = sp.state ?? ''
   const responseType = sp.response_type
+  const normalizedRedirectUri = redirectUri
+    ? normalizeRedirectUri(redirectUri)
+    : undefined
 
   if (
     !(clientId && redirectUri && codeChallenge) ||
@@ -32,7 +36,12 @@ export default async function AuthorizePage({ searchParams }: Props) {
     return <ErrorPage message='Unknown client.' />
   }
 
-  if (!client.redirectUris.includes(redirectUri)) {
+  if (
+    !(
+      normalizedRedirectUri &&
+      client.redirectUris.includes(normalizedRedirectUri)
+    )
+  ) {
     return <ErrorPage message='Redirect URI not registered for this client.' />
   }
 
@@ -47,40 +56,42 @@ export default async function AuthorizePage({ searchParams }: Props) {
     connectUrl.searchParams.set('oauth_redirect_uri', redirectUri)
     connectUrl.searchParams.set('oauth_code_challenge', codeChallenge)
     connectUrl.searchParams.set('oauth_state', state)
-    redirect(connectUrl.pathname + connectUrl.search)
+    redirect((connectUrl.pathname + connectUrl.search) as never)
   }
 
   async function authorize() {
     'use server'
 
-    if (!(session && clientId && redirectUri && codeChallenge && state)) {
+    if (
+      !(session && clientId && normalizedRedirectUri && codeChallenge && state)
+    ) {
       return
     }
 
     const code = await createCode({
       clientId,
       userId: session.user.id,
-      redirectUri,
+      redirectUri: normalizedRedirectUri,
       codeChallenge,
     })
 
-    const dest = new URL(redirectUri)
+    const dest = new URL(normalizedRedirectUri)
     dest.searchParams.set('code', code)
     dest.searchParams.set('state', state)
-    redirect(dest.toString())
+    redirect(dest.toString() as never)
   }
 
   async function deny() {
     'use server'
 
-    if (!(redirectUri && state)) {
+    if (!(normalizedRedirectUri && state)) {
       return
     }
 
-    const dest = new URL(redirectUri)
+    const dest = new URL(normalizedRedirectUri)
     dest.searchParams.set('error', 'access_denied')
     dest.searchParams.set('state', state)
-    redirect(dest.toString())
+    redirect(dest.toString() as never)
   }
 
   return (

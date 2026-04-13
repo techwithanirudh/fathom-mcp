@@ -49,9 +49,7 @@ export const meetingItemSchema = z.object({
   scheduledEnd: z.string(),
   scheduledStart: z.string(),
   shareUrl: z.string(),
-  summary: summarySchema.optional(),
   title: z.string(),
-  transcript: z.array(transcriptItemSchema).optional(),
   url: z.string(),
 })
 
