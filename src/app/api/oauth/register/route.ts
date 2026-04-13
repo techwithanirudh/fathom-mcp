@@ -1,69 +1,65 @@
-import { NextResponse } from 'next/server'
+import { z } from 'zod'
 
-import { createClient } from '@/server/oauth'
+import { registerClient } from '@/server/auth/oauth'
 
-// RFC 7591 Dynamic Client Registration
-export const POST = async (request: Request) => {
-  let body: Record<string, unknown>
+// Accept any absolute URI for redirect_uris — RFC 7591 doesn't restrict to http/https,
+// and MCP clients may use http://127.0.0.1:PORT, http://localhost:PORT, or custom schemes.
+const isAbsoluteUri = (s: string) => {
+  try {
+    new URL(s)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const schema = z.object({
+  client_name: z.string().optional(),
+  client_uri: z.string().optional(),
+  redirect_uris: z
+    .array(z.string().min(1).refine(isAbsoluteUri, 'Must be an absolute URI'))
+    .min(1),
+})
+
+/**
+ * OAuth 2.0 Dynamic Client Registration (RFC 7591).
+ */
+export async function POST(req: Request) {
+  let body: unknown
 
   try {
-    body = (await request.json()) as Record<string, unknown>
+    body = await req.json()
   } catch {
-    return NextResponse.json(
-      { error: 'invalid_request', error_description: 'Invalid JSON body.' },
+    return Response.json({ error: 'invalid_request' }, { status: 400 })
+  }
+
+  const parsed = schema.safeParse(body)
+
+  if (!parsed.success) {
+    const hasRedirectError = parsed.error.issues.some((i) =>
+      i.path.includes('redirect_uris')
+    )
+    return Response.json(
+      { error: hasRedirectError ? 'invalid_redirect_uri' : 'invalid_request' },
       { status: 400 }
     )
   }
 
-  const {
-    redirect_uris,
-    client_name,
-    client_uri,
-    grant_types,
-    token_endpoint_auth_method,
-  } = body
+  const { client_name, client_uri, redirect_uris } = parsed.data
 
-  if (
-    !Array.isArray(redirect_uris) ||
-    redirect_uris.length === 0 ||
-    redirect_uris.some((u) => typeof u !== 'string')
-  ) {
-    return NextResponse.json(
-      {
-        error: 'invalid_redirect_uri',
-        error_description:
-          'redirect_uris must be a non-empty array of strings.',
-      },
-      { status: 400 }
-    )
-  }
-
-  const clientId = await createClient({
-    redirectUris: redirect_uris as string[],
-    clientName: typeof client_name === 'string' ? client_name : undefined,
-    clientUri: typeof client_uri === 'string' ? client_uri : undefined,
-    grantTypes: Array.isArray(grant_types)
-      ? (grant_types as string[])
-      : undefined,
-    tokenEndpointAuthMethod:
-      typeof token_endpoint_auth_method === 'string'
-        ? token_endpoint_auth_method
-        : undefined,
+  const clientId = await registerClient({
+    name: client_name,
+    uri: client_uri,
+    redirectUris: redirect_uris,
   })
 
-  return NextResponse.json(
+  return Response.json(
     {
       client_id: clientId,
-      client_name: typeof client_name === 'string' ? client_name : null,
       redirect_uris,
-      grant_types: Array.isArray(grant_types)
-        ? grant_types
-        : ['authorization_code'],
-      token_endpoint_auth_method:
-        typeof token_endpoint_auth_method === 'string'
-          ? token_endpoint_auth_method
-          : 'none',
+      grant_types: ['authorization_code'],
       response_types: ['code'],
+      token_endpoint_auth_method: 'none',
     },
     { status: 201 }
   )

@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server'
+import { redirect } from 'next/navigation'
 
 import { clearSession } from '@/server/auth'
 
-export const POST = async (request: Request) => {
+export async function POST() {
   await clearSession()
-
-  return NextResponse.redirect(new URL('/', request.url))
+  redirect('/')
 }

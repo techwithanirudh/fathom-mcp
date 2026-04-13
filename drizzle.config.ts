@@ -3,10 +3,10 @@ import type { Config } from 'drizzle-kit'
 import { env } from './src/env'
 
 export default {
-  schema: './src/server/db/schema/index.ts',
+  schema: './src/server/db/schema.ts',
   dialect: 'postgresql',
   dbCredentials: {
     url: env.DATABASE_URL,
   },
-  tablesFilter: ['fathom_mcp_*'],
+  tablesFilter: ['mcp_*'],
 } satisfies Config

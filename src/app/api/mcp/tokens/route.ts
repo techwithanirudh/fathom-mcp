@@ -1,46 +1,54 @@
-import { NextResponse } from 'next/server'
+import { z } from 'zod'
 
 import { getSession } from '@/server/auth'
-import { createMcpToken, listMcpTokens } from '@/server/mcp/tokens'
+import { createToken, listTokens } from '@/server/tokens'
 
-export const GET = async () => {
+export async function GET() {
   const session = await getSession()
 
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+    return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const tokens = await listMcpTokens(session.user.id)
+  const tokens = await listTokens(session.user.id)
 
-  return NextResponse.json({ tokens })
+  return Response.json(
+    tokens.map((t) => ({
+      id: t.id,
+      label: t.label,
+      clientId: t.clientId,
+      lastUsedAt: t.lastUsedAt,
+      createdAt: t.createdAt,
+    }))
+  )
 }
 
-export const POST = async (request: Request) => {
+const createSchema = z.object({
+  label: z.string().min(1).max(100),
+})
+
+export async function POST(req: Request) {
   const session = await getSession()
 
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+    return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  let label = 'Manual token'
+  let body: unknown
 
   try {
-    const body = (await request.json()) as Record<string, unknown>
-    if (typeof body.label === 'string' && body.label.trim()) {
-      label = body.label.trim()
-    }
+    body = await req.json()
   } catch {
-    // fall through with default label
+    return Response.json({ error: 'invalid_request' }, { status: 400 })
   }
 
-  const token = await createMcpToken(session.user.id, label)
+  const parsed = createSchema.safeParse(body)
 
-  return NextResponse.json(
-    {
-      mcpUrl: new URL('/mcp', request.url).toString(),
-      token,
-      workspaceName: session.user.workspaceName,
-    },
-    { status: 201 }
-  )
+  if (!parsed.success) {
+    return Response.json({ error: 'invalid_request' }, { status: 400 })
+  }
+
+  const raw = await createToken(session.user.id, parsed.data.label)
+
+  return Response.json({ token: raw }, { status: 201 })
 }

@@ -1,392 +1,159 @@
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
+import type { GetRecordingTranscriptRequest } from 'fathom-typescript/sdk/models/operations'
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import { z } from 'zod'
 
-import {
-  createFathomClient,
-  getFathomAccessToken,
-} from '@/server/fathom/client'
-import { verifyMcpToken } from '@/server/mcp/tokens'
+import { env } from '@/env'
+import { createFathomClient } from '@/server/fathom'
+import { verifyToken } from '@/server/tokens'
 
-interface ToolExtra {
-  authInfo?: AuthInfo
-}
-
-const listMeetingsInputSchema = {
-  calendar_invitees: z
-    .array(z.string().email())
-    .optional()
-    .describe('Filter by invitee email addresses.'),
-  calendar_invitees_domains: z
-    .array(z.string())
-    .optional()
-    .describe('Filter by invitee company domains.'),
-  calendar_invitees_domains_type: z
-    .enum(['only_internal', 'one_or_more_external'])
-    .optional()
-    .describe('Filter by internal or external invitees.'),
-  created_after: z
-    .string()
-    .optional()
-    .describe('Only include meetings created after this ISO timestamp.'),
-  created_before: z
-    .string()
-    .optional()
-    .describe('Only include meetings created before this ISO timestamp.'),
-  cursor: z.string().optional().describe('Pagination cursor.'),
-  include_action_items: z
-    .boolean()
-    .optional()
-    .describe('Include action items in the response.'),
-  include_crm_matches: z
-    .boolean()
-    .optional()
-    .describe('Include CRM matches in the response.'),
-  include_summary: z
-    .boolean()
-    .optional()
-    .describe('Include summary content in the response.'),
-  include_transcript: z
-    .boolean()
-    .optional()
-    .describe('Include transcript content in the response.'),
-  recorded_by: z
-    .array(z.string().email())
-    .optional()
-    .describe('Filter by recorder email addresses.'),
-  teams: z.array(z.string()).optional().describe('Filter by team name.'),
-} as const
-
-const getSummaryInputSchema = {
-  destination_url: z
-    .string()
-    .url()
-    .optional()
-    .describe('Optional callback URL for async summary delivery.'),
-  recording_id: z
-    .number()
-    .int()
-    .positive()
-    .describe('The Fathom recording ID.'),
-} as const
-
-const getTranscriptInputSchema = {
-  destination_url: z
-    .string()
-    .url()
-    .optional()
-    .describe('Optional callback URL for async transcript delivery.'),
-  recording_id: z
-    .number()
-    .int()
-    .positive()
-    .describe('The Fathom recording ID.'),
-} as const
-
-const listTeamMembersInputSchema = {
-  cursor: z.string().optional().describe('Pagination cursor.'),
-  team_names: z
-    .array(z.string())
-    .optional()
-    .describe('Filter members by team name.'),
-} as const
-
-const listTeamsInputSchema = {
-  cursor: z.string().optional().describe('Pagination cursor.'),
-} as const
-
-const createWebhookInputSchema = {
-  destination_url: z.string().url(),
-  include_action_items: z.boolean().optional(),
-  include_crm_matches: z.boolean().optional(),
-  include_summary: z.boolean().optional(),
-  include_transcript: z.boolean().optional(),
-  triggered_for: z
-    .array(z.enum(['my_recordings', 'shared_external_recordings']))
-    .optional(),
-} as const
-
-const deleteWebhookInputSchema = {
-  webhook_id: z.string().min(1),
-} as const
-
-const FATHOM_API_INFO = `# Fathom MCP
-
-Authenticated remote MCP server backed by Fathom OAuth.
-
-Available tools:
-- list_meetings
-- get_summary
-- get_transcript
-- list_teams
-- list_team_members
-- create_webhook
-- delete_webhook`
-
-const FATHOM_RATE_LIMITS = `# Fathom API notes
-
-Fathom applies upstream API rate limits. When those limits are hit, the MCP server surfaces the upstream error back to the client.`
-
-const getUserId = (extra: ToolExtra) => {
-  const userId = extra.authInfo?.extra?.userId
-
-  if (typeof userId !== 'string' || userId.length === 0) {
-    throw new Error('Authenticated MCP token is missing a user ID.')
-  }
-
-  return userId
-}
-
-const toTextResult = (value: unknown) => ({
-  content: [
-    {
-      text: JSON.stringify(value, null, 2),
-      type: 'text' as const,
-    },
-  ],
-})
-
-const fetchTranscript = async (
-  userId: string,
-  args: { destination_url?: string; recording_id: number }
-) => {
-  const accessToken = await getFathomAccessToken(userId)
-  const url = new URL(
-    `/external/v1/recordings/${args.recording_id}/transcript`,
-    'https://api.fathom.ai'
-  )
-
-  if (args.destination_url) {
-    url.searchParams.set('destination_url', args.destination_url)
-  }
-
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(
-      `Fathom transcript request failed with status ${response.status}.`
-    )
-  }
-
-  return response.json()
-}
-
-const getFirstPage = async <T>(iteratorPromise: Promise<AsyncIterable<T>>) => {
-  const iterator = await iteratorPromise
-
-  for await (const page of iterator) {
-    return page ?? null
-  }
-
-  return null
-}
-
-const handler = createMcpHandler(
+const mcpHandler = createMcpHandler(
   (server) => {
-    server.registerTool(
+    server.tool(
       'list_meetings',
+      'List your Fathom meeting recordings. Returns meeting metadata and a cursor for pagination.',
       {
-        description:
-          'List Fathom meetings recorded by or shared with the connected user.',
-        inputSchema: listMeetingsInputSchema,
-        title: 'List meetings',
+        cursor: z
+          .string()
+          .optional()
+          .describe('Pagination cursor from a previous response.'),
       },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const page = await getFirstPage(
-          client.listMeetings({
-            calendarInviteesDomains: args.calendar_invitees_domains,
-            calendarInviteesDomainsType: args.calendar_invitees_domains_type,
-            createdAfter: args.created_after,
-            createdBefore: args.created_before,
-            cursor: args.cursor,
-            includeActionItems: args.include_action_items,
-            includeCrmMatches: args.include_crm_matches,
-            includeSummary: args.include_summary,
-            includeTranscript: args.include_transcript,
-            recordedBy: args.recorded_by,
-            teams: args.teams,
-          })
-        )
+      async ({ cursor }, { authInfo }) => {
+        const userId = authInfo?.extra?.userId as string | undefined
 
-        return toTextResult(page)
+        if (!userId) {
+          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
+        }
+
+        const client = createFathomClient(userId)
+        const iter = await client.listMeetings({ cursor })
+
+        let meetings: {
+          id: number
+          title: string
+          meetingTitle: string | null
+          scheduledStart: Date
+          scheduledEnd: Date
+          url: string
+          shareUrl: string
+          recordedBy: string
+        }[] = []
+        let nextCursor: string | null = null
+
+        for await (const page of iter) {
+          if (!page) {
+            break
+          }
+
+          meetings = page.result.items.map((m) => ({
+            id: m.recordingId,
+            title: m.title,
+            meetingTitle: m.meetingTitle,
+            scheduledStart: m.scheduledStartTime,
+            scheduledEnd: m.scheduledEndTime,
+            url: m.url,
+            shareUrl: m.shareUrl,
+            recordedBy: m.recordedBy.name,
+          }))
+          nextCursor = page.result.nextCursor
+          break
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ meetings, nextCursor }, null, 2),
+            },
+          ],
+        }
       }
     )
 
-    server.registerTool(
-      'get_summary',
-      {
-        description: 'Fetch the summary for a specific Fathom recording.',
-        inputSchema: getSummaryInputSchema,
-        title: 'Get summary',
-      },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const request = args.destination_url
-          ? {
-              destinationUrl: args.destination_url,
-              recordingId: args.recording_id,
-            }
-          : {
-              recordingId: args.recording_id,
-            }
-        const response = await client.getRecordingSummary(request)
-
-        return toTextResult(response)
-      }
-    )
-
-    server.registerTool(
+    server.tool(
       'get_transcript',
+      'Get the full transcript of a Fathom meeting.',
       {
-        description: 'Fetch the transcript for a specific Fathom recording.',
-        inputSchema: getTranscriptInputSchema,
-        title: 'Get transcript',
+        recording_id: z
+          .number()
+          .int()
+          .describe('The recording ID from list_meetings.'),
       },
-      async (args, extra: ToolExtra) => {
-        const response = await fetchTranscript(getUserId(extra), args)
+      async ({ recording_id }, { authInfo }) => {
+        const userId = authInfo?.extra?.userId as string | undefined
 
-        return toTextResult(response)
+        if (!userId) {
+          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
+        }
+
+        const client = createFathomClient(userId)
+        // destinationUrl is marked required in SDK types but optional in the API —
+        // omitting it makes the endpoint return data synchronously.
+        const req = {
+          recordingId: recording_id,
+        } as GetRecordingTranscriptRequest
+        const res = await client.getRecordingTranscript(req)
+
+        if (!res) {
+          return {
+            content: [{ type: 'text', text: 'Transcript not found.' }],
+          }
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(res, null, 2) }],
+        }
       }
     )
 
-    server.registerTool(
-      'list_teams',
+    server.tool(
+      'get_summary',
+      'Get the AI-generated summary of a Fathom meeting.',
       {
-        description: 'List teams visible to the connected Fathom account.',
-        inputSchema: listTeamsInputSchema,
-        title: 'List teams',
+        recording_id: z
+          .number()
+          .int()
+          .describe('The recording ID from list_meetings.'),
       },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const page = await getFirstPage(
-          client.listTeams({
-            cursor: args.cursor,
-          })
-        )
+      async ({ recording_id }, { authInfo }) => {
+        const userId = authInfo?.extra?.userId as string | undefined
 
-        return toTextResult(page)
-      }
-    )
+        if (!userId) {
+          return { content: [{ type: 'text', text: 'Unauthorized.' }] }
+        }
 
-    server.registerTool(
-      'list_team_members',
-      {
-        description: 'List Fathom team members for the connected account.',
-        inputSchema: listTeamMembersInputSchema,
-        title: 'List team members',
-      },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const page = await getFirstPage(
-          client.listTeamMembers({
-            cursor: args.cursor,
-            team: args.team_names?.[0],
-          })
-        )
-
-        return toTextResult(page)
-      }
-    )
-
-    server.registerTool(
-      'create_webhook',
-      {
-        description: 'Create a webhook for Fathom recording events.',
-        inputSchema: createWebhookInputSchema,
-        title: 'Create webhook',
-      },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const webhook = await client.createWebhook({
-          destinationUrl: args.destination_url,
-          includeActionItems: args.include_action_items,
-          includeCrmMatches: args.include_crm_matches,
-          includeSummary: args.include_summary,
-          includeTranscript: args.include_transcript,
-          triggeredFor: args.triggered_for ?? ['my_recordings'],
+        const client = createFathomClient(userId)
+        const res = await client.getRecordingSummary({
+          recordingId: recording_id,
         })
 
-        return toTextResult(webhook)
+        if (!res) {
+          return { content: [{ type: 'text', text: 'Summary not found.' }] }
+        }
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(res, null, 2) }],
+        }
       }
-    )
-
-    server.registerTool(
-      'delete_webhook',
-      {
-        description: 'Delete a webhook by ID.',
-        inputSchema: deleteWebhookInputSchema,
-        title: 'Delete webhook',
-      },
-      async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        await client.deleteWebhook({
-          id: args.webhook_id,
-        })
-
-        return toTextResult({ success: true, webhookId: args.webhook_id })
-      }
-    )
-
-    server.registerResource(
-      'fathom-api-info',
-      'fathom://api/info',
-      {
-        description: 'Overview of this Fathom MCP server.',
-        mimeType: 'text/markdown',
-        title: 'Fathom API info',
-      },
-      async () => ({
-        contents: [{ text: FATHOM_API_INFO, uri: 'fathom://api/info' }],
-      })
-    )
-
-    server.registerResource(
-      'fathom-rate-limits',
-      'fathom://api/rate-limits',
-      {
-        description: 'Notes about upstream Fathom API rate limiting.',
-        mimeType: 'text/markdown',
-        title: 'Fathom rate limits',
-      },
-      async () => ({
-        contents: [
-          { text: FATHOM_RATE_LIMITS, uri: 'fathom://api/rate-limits' },
-        ],
-      })
     )
   },
   {
-    serverInfo: {
-      name: 'fathom-mcp',
-      version: '0.2.0',
-    },
-  },
-  {
-    basePath: '',
-    disableSse: true,
-    maxDuration: 60,
-    verboseLogs: true,
+    serverInfo: { name: 'fathom-mcp', version: '1.0.0' },
   }
 )
 
-const authedHandler = withMcpAuth(
-  async (request: Request) => handler(request),
-  async (_request: Request, bearerToken?: string) =>
-    verifyMcpToken(bearerToken),
+const handler = withMcpAuth(
+  mcpHandler,
+  (_req, bearerToken) => {
+    if (!bearerToken) {
+      return undefined
+    }
+
+    return verifyToken(bearerToken)
+  },
   {
     required: true,
-    requiredScopes: ['mcp'],
-    resourceMetadataPath: '/.well-known/oauth-protected-resource',
+    resourceUrl: `${env.NEXT_PUBLIC_BASE_URL}/mcp`,
   }
 )
 
-export const GET = authedHandler
-export const POST = authedHandler
-export const DELETE = authedHandler
+export { handler as GET, handler as POST, handler as DELETE }

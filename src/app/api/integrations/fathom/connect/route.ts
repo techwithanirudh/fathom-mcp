@@ -1,33 +1,37 @@
-import { encodeBase64urlNoPadding } from '@oslojs/encoding'
+import { randomUUID } from 'node:crypto'
+
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { redirect } from 'next/navigation'
+import { getFathomAuthUrl } from '@/server/fathom'
 
-import { buildFathomAuthorizationUrl } from '@/server/fathom/client'
+/**
+ * Kicks off Fathom OAuth.
+ * The `state` param is a random UUID stored in a cookie for CSRF protection.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const returnTo = url.searchParams.get('return_to') ?? '/tokens'
 
-const STATE_COOKIE_NAME = 'fathom-mcp.oauth-state'
+  const state = randomUUID()
 
-const generateState = () => {
-  const bytes = new Uint8Array(24)
-  crypto.getRandomValues(bytes)
+  const jar = await cookies()
+  jar.set('fathom_oauth_state', state, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 10, // 10 minutes
+  })
+  jar.set('fathom_oauth_return', returnTo, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 10,
+  })
 
-  return encodeBase64urlNoPadding(bytes)
+  const authUrl = getFathomAuthUrl(state)
+  redirect(authUrl)
 }
 
-export const GET = async (request: Request) => {
-  try {
-    const state = generateState()
-    const cookieStore = await cookies()
-
-    cookieStore.set(STATE_COOKIE_NAME, state, {
-      httpOnly: true,
-      maxAge: 60 * 10,
-      path: '/',
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-    })
-
-    return NextResponse.redirect(buildFathomAuthorizationUrl(state))
-  } catch {
-    return NextResponse.redirect(new URL('/?error=oauth-config', request.url))
-  }
-}
+export const runtime = 'nodejs'

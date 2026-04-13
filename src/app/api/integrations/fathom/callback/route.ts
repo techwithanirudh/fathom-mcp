@@ -1,83 +1,120 @@
 import { randomUUID } from 'node:crypto'
 
-import type { Meeting } from 'fathom-typescript/sdk/models/shared/meeting'
+import { eq } from 'drizzle-orm'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { redirect } from 'next/navigation'
 
 import { createSession } from '@/server/auth'
+import { createCode } from '@/server/auth/oauth'
 import { db } from '@/server/db'
 import { users } from '@/server/db/schema'
 import {
   findUserByEmail,
-  inferWorkspace,
-  initOAuthClient,
-  persistOAuthTokens,
-} from '@/server/fathom/client'
+  inferWorkspaceFromMeetings,
+  initFathomOAuth,
+  saveFathomTokens,
+} from '@/server/fathom'
 
-const STATE_COOKIE = 'fathom-mcp.oauth-state'
-const OAUTH_RETURN_COOKIE = 'fathom-mcp.oauth-return'
+interface PendingOAuth {
+  clientId: string
+  codeChallenge: string
+  redirectUri: string
+  state: string
+}
 
-export const GET = async (request: Request) => {
-  const url = new URL(request.url)
+/**
+ * Fathom OAuth callback.
+ *
+ * 1. Validates state cookie (CSRF).
+ * 2. Exchanges code for tokens.
+ * 3. Infers workspace from meetings.
+ * 4. Creates or reuses a user record.
+ * 5. If there are pending MCP OAuth params (from /oauth/authorize),
+ *    completes that flow by creating an authorization code and redirecting.
+ * 6. Otherwise, redirects to /tokens.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
+
   const jar = await cookies()
-  const expectedState = jar.get(STATE_COOKIE)?.value
+  const savedState = jar.get('fathom_oauth_state')?.value
+  const returnTo = jar.get('fathom_oauth_return')?.value ?? '/tokens'
+  const pendingOAuth = jar.get('oauth_pending')?.value
 
-  jar.delete(STATE_COOKIE)
+  jar.delete('fathom_oauth_state')
+  jar.delete('fathom_oauth_return')
 
-  if (!(code && state && expectedState && state === expectedState)) {
-    return NextResponse.redirect(new URL('/?error=oauth-state', request.url))
+  if (!(code && state) || state !== savedState) {
+    redirect('/?error=invalid_state')
   }
 
-  try {
-    const { client, tempStore } = initOAuthClient(code)
+  // Exchange code for Fathom tokens.
+  const { client, tempStore } = initFathomOAuth(code)
 
-    let meetings: Meeting[] = []
+  // Fetch first page of meetings to infer workspace identity.
+  const iter = await client.listMeetings()
+  let meetings: Awaited<
+    ReturnType<typeof client.listMeetings>
+  >['result']['items'] = []
+
+  for await (const page of iter) {
+    if (page) {
+      meetings = page.result.items
+    }
+
+    break
+  }
+
+  const { email, workspaceName } = inferWorkspaceFromMeetings(meetings)
+
+  // Reuse existing user if we've seen this email before.
+  let user = email ? await findUserByEmail(email) : null
+
+  if (user) {
+    await db.update(users).set({ workspaceName }).where(eq(users.id, user.id))
+  } else {
+    const id = randomUUID()
+    await db.insert(users).values({ id, workspaceName, emailHint: email })
+    user = {
+      id,
+      workspaceName,
+      emailHint: email,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+  }
+
+  await saveFathomTokens(user.id, tempStore, email)
+  await createSession(user.id)
+
+  jar.delete('oauth_pending')
+
+  // If there was a pending MCP OAuth flow, complete it.
+  if (pendingOAuth) {
+    let params: PendingOAuth
 
     try {
-      const iter = await client.listMeetings({})
-      for await (const page of iter) {
-        meetings = page?.result.items ?? []
-        break
-      }
+      params = JSON.parse(pendingOAuth) as PendingOAuth
     } catch {
-      // non-fatal — we still create the user
+      redirect('/tokens')
     }
 
-    const inferred = inferWorkspace(meetings)
-    const existing = inferred.emailHint
-      ? await findUserByEmail(inferred.emailHint)
-      : null
-    const userId = existing?.id ?? randomUUID()
-
-    if (!existing) {
-      await db.insert(users).values({
-        id: userId,
-        workspaceName: inferred.workspaceName,
-        emailHint: inferred.emailHint,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-    }
-
-    await persistOAuthTokens(userId, tempStore, {
-      emailHint: inferred.emailHint,
-      recorderName: inferred.recorderName,
+    const authCode = await createCode({
+      clientId: params.clientId,
+      userId: user.id,
+      redirectUri: params.redirectUri,
+      codeChallenge: params.codeChallenge,
     })
 
-    await createSession(userId)
-
-    // Resume OAuth authorize flow if one was in progress
-    const oauthReturn = jar.get(OAUTH_RETURN_COOKIE)?.value
-    jar.delete(OAUTH_RETURN_COOKIE)
-
-    if (oauthReturn?.startsWith('/oauth/authorize')) {
-      return NextResponse.redirect(new URL(oauthReturn, request.url))
-    }
-
-    return NextResponse.redirect(new URL('/?connected=1', request.url))
-  } catch {
-    return NextResponse.redirect(new URL('/?error=oauth-callback', request.url))
+    const dest = new URL(params.redirectUri)
+    dest.searchParams.set('code', authCode)
+    dest.searchParams.set('state', params.state)
+    redirect(dest.toString())
   }
+
+  redirect(returnTo)
 }
+
+export const runtime = 'nodejs'

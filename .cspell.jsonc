@@ -7,13 +7,21 @@
   "useGitignore": true,
   "version": "0.2",
   "words": [
+    "ciphertext",
     "fathom",
+    "hugeicons",
     "lefthook",
+    "luma",
     "modelcontextprotocol",
+    "oslojs",
+    "pkce",
     "Qwik",
+    "sess",
     "streamable",
     "Streamable",
     "techwithanirudh",
+    "trycloudflare",
+    "uidx",
     "ultracite"
   ]
 }
