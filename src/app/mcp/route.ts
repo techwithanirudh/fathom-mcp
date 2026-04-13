@@ -2,7 +2,10 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import { z } from 'zod'
 
-import { createFathomClient } from '@/server/fathom/client'
+import {
+  createFathomClient,
+  getFathomAccessToken,
+} from '@/server/fathom/client'
 import { verifyMcpToken } from '@/server/mcp/tokens'
 
 interface ToolExtra {
@@ -143,6 +146,37 @@ const toTextResult = (value: unknown) => ({
   ],
 })
 
+const fetchTranscript = async (
+  userId: string,
+  args: { destination_url?: string; recording_id: number }
+) => {
+  const accessToken = await getFathomAccessToken(userId)
+  const url = new URL(
+    `/external/v1/recordings/${args.recording_id}/transcript`,
+    'https://api.fathom.ai'
+  )
+
+  if (args.destination_url) {
+    url.searchParams.set('destination_url', args.destination_url)
+  }
+
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Fathom transcript request failed with status ${response.status}.`
+    )
+  }
+
+  return response.json()
+}
+
 const getFirstPage = async <T>(iteratorPromise: Promise<AsyncIterable<T>>) => {
   const iterator = await iteratorPromise
 
@@ -194,10 +228,15 @@ const handler = createMcpHandler(
       },
       async (args, extra: ToolExtra) => {
         const client = createFathomClient(getUserId(extra))
-        const response = await client.getRecordingSummary({
-          destinationUrl: args.destination_url,
-          recordingId: args.recording_id,
-        })
+        const request = args.destination_url
+          ? {
+              destinationUrl: args.destination_url,
+              recordingId: args.recording_id,
+            }
+          : {
+              recordingId: args.recording_id,
+            }
+        const response = await client.getRecordingSummary(request)
 
         return toTextResult(response)
       }
@@ -211,11 +250,7 @@ const handler = createMcpHandler(
         title: 'Get transcript',
       },
       async (args, extra: ToolExtra) => {
-        const client = createFathomClient(getUserId(extra))
-        const response = await client.getRecordingTranscript({
-          destinationUrl: args.destination_url,
-          recordingId: args.recording_id,
-        })
+        const response = await fetchTranscript(getUserId(extra), args)
 
         return toTextResult(response)
       }
@@ -348,7 +383,7 @@ const authedHandler = withMcpAuth(
   {
     required: true,
     requiredScopes: ['mcp'],
-    resourceMetadataPath: '/.well-known/oauth-protected-resource/mcp',
+    resourceMetadataPath: '/.well-known/oauth-protected-resource',
   }
 )
 

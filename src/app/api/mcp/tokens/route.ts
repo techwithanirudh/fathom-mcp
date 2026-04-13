@@ -1,23 +1,46 @@
 import { NextResponse } from 'next/server'
 
 import { getSession } from '@/server/auth'
-import { createMcpToken } from '@/server/mcp/tokens'
+import { createMcpToken, listMcpTokens } from '@/server/mcp/tokens'
 
-export const GET = async (request: Request) => {
+export const GET = async () => {
   const session = await getSession()
 
   if (!session) {
-    return NextResponse.json(
-      { error: 'Sign in with Fathom before creating an MCP token.' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
-  const token = await createMcpToken(session.user.id, 'Claude / MCP token')
+  const tokens = await listMcpTokens(session.user.id)
 
-  return NextResponse.json({
-    token,
-    mcpUrl: new URL('/mcp', request.url).toString(),
-    workspaceName: session.user.workspaceName,
-  })
+  return NextResponse.json({ tokens })
+}
+
+export const POST = async (request: Request) => {
+  const session = await getSession()
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+  }
+
+  let label = 'Manual token'
+
+  try {
+    const body = (await request.json()) as Record<string, unknown>
+    if (typeof body.label === 'string' && body.label.trim()) {
+      label = body.label.trim()
+    }
+  } catch {
+    // fall through with default label
+  }
+
+  const token = await createMcpToken(session.user.id, label)
+
+  return NextResponse.json(
+    {
+      mcpUrl: new URL('/mcp', request.url).toString(),
+      token,
+      workspaceName: session.user.workspaceName,
+    },
+    { status: 201 }
+  )
 }

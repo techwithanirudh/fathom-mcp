@@ -24,6 +24,7 @@ export const buildFathomAuthorizationUrl = (state: string) =>
     state,
   })
 
+// Token store backed by the database (encrypted at rest)
 class DbTokenStore {
   private readonly userId: string
 
@@ -32,24 +33,20 @@ class DbTokenStore {
   }
 
   async get() {
-    const [connection] = await db
+    const [row] = await db
       .select()
       .from(fathomConnections)
       .where(eq(fathomConnections.userId, this.userId))
       .limit(1)
 
-    if (!connection) {
-      return {
-        token: '',
-        refresh_token: '',
-        expires: 0,
-      }
+    if (!row) {
+      return { token: '', refresh_token: '', expires: 0 }
     }
 
     return {
-      token: decryptSecret(connection.accessTokenEncrypted),
-      refresh_token: decryptSecret(connection.refreshTokenEncrypted),
-      expires: Math.floor(connection.accessTokenExpiresAt.getTime() / 1000),
+      token: decryptSecret(row.accessTokenEncrypted),
+      refresh_token: decryptSecret(row.refreshTokenEncrypted),
+      expires: Math.floor(row.accessTokenExpiresAt.getTime() / 1000),
     }
   }
 
@@ -66,19 +63,16 @@ class DbTokenStore {
   }
 }
 
-export const createFathomClient = (userId: string) => {
-  const tokenStore = new DbTokenStore(userId)
-
-  return new Fathom({
+export const createFathomClient = (userId: string) =>
+  new Fathom({
     security: Fathom.withAuthorization({
       clientId: env.FATHOM_CLIENT_ID,
       clientSecret: env.FATHOM_CLIENT_SECRET,
       code: '',
       redirectUri: getFathomCallbackUrl(),
-      tokenStore,
+      tokenStore: new DbTokenStore(userId),
     }),
   })
-}
 
 export const initOAuthClient = (code: string) => {
   const tempStore = Fathom.newTokenStore()
@@ -99,17 +93,12 @@ export const initOAuthClient = (code: string) => {
 export const persistOAuthTokens = async (
   userId: string,
   tempStore: TempTokenStore,
-  metadata?: {
-    emailHint?: string | null
-    recorderName?: string | null
-  }
+  metadata?: { emailHint?: string | null; recorderName?: string | null }
 ) => {
   const stored = await tempStore.get()
 
   if (!stored) {
-    throw new Error(
-      'No OAuth tokens were stored. The Fathom code exchange did not complete.'
-    )
+    throw new Error('No OAuth tokens were stored after code exchange.')
   }
 
   const now = new Date()
@@ -142,28 +131,23 @@ export const persistOAuthTokens = async (
     })
 }
 
-export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
-  const frequency = new Map<
-    string,
-    { count: number; email: string; name: string }
-  >()
+// Infer workspace identity from the meeting list (most frequent recorder)
+export const inferWorkspace = (meetings: Meeting[]) => {
+  const freq = new Map<string, { count: number; email: string; name: string }>()
 
-  for (const meeting of meetings) {
-    const key = meeting.recordedBy.email.toLowerCase()
-    const current = frequency.get(key)
-
-    frequency.set(key, {
-      count: (current?.count ?? 0) + 1,
-      email: meeting.recordedBy.email,
-      name: meeting.recordedBy.name,
+  for (const m of meetings) {
+    const key = m.recordedBy.email.toLowerCase()
+    const cur = freq.get(key)
+    freq.set(key, {
+      count: (cur?.count ?? 0) + 1,
+      email: m.recordedBy.email,
+      name: m.recordedBy.name,
     })
   }
 
-  const primary = Array.from(frequency.values()).sort(
-    (left, right) => right.count - left.count
-  )[0]
+  const top = [...freq.values()].sort((a, b) => b.count - a.count)[0]
 
-  if (!primary) {
+  if (!top) {
     return {
       emailHint: null,
       recorderName: null,
@@ -171,26 +155,35 @@ export const inferWorkspaceFromMeetings = (meetings: Meeting[]) => {
     }
   }
 
-  const firstName = primary.name.split(' ')[0] ?? 'Fathom'
-
+  const first = top.name.split(' ')[0] ?? 'Fathom'
   return {
-    emailHint: primary.email,
-    recorderName: primary.name,
-    workspaceName: `${firstName}'s Fathom desk`,
+    emailHint: top.email,
+    recorderName: top.name,
+    workspaceName: `${first}'s workspace`,
   }
 }
 
-export const findExistingUserForMeetings = async (meetings: Meeting[]) => {
-  const inferred = inferWorkspaceFromMeetings(meetings)
+// Returns the current access token for direct API calls (outside the SDK).
+// The Fathom SDK handles refresh automatically for SDK-driven calls.
+export const getFathomAccessToken = async (userId: string) => {
+  const [row] = await db
+    .select()
+    .from(fathomConnections)
+    .where(eq(fathomConnections.userId, userId))
+    .limit(1)
 
-  if (!inferred.emailHint) {
-    return null
+  if (!row) {
+    throw new Error('No Fathom connection found for this user.')
   }
 
+  return decryptSecret(row.accessTokenEncrypted)
+}
+
+export const findUserByEmail = async (emailHint: string) => {
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.emailHint, inferred.emailHint))
+    .where(eq(users.emailHint, emailHint))
     .limit(1)
 
   return user ?? null

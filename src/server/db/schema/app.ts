@@ -6,6 +6,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 
+// Users identified via Fathom OAuth
 export const users = pgTable(
   'fathom_mcp_users',
   {
@@ -19,11 +20,10 @@ export const users = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
-    uniqueIndex('fathom_mcp_users_email_hint_unique').on(table.emailHint),
-  ]
+  (t) => [uniqueIndex('fathom_mcp_users_email_hint_unique').on(t.emailHint)]
 )
 
+// Web sessions for app login (cookie-based)
 export const sessions = pgTable(
   'fathom_mcp_sessions',
   {
@@ -37,12 +37,13 @@ export const sessions = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
-    uniqueIndex('fathom_mcp_sessions_token_hash_unique').on(table.tokenHash),
-    index('fathom_mcp_sessions_user_id_idx').on(table.userId),
+  (t) => [
+    uniqueIndex('fathom_mcp_sessions_token_hash_unique').on(t.tokenHash),
+    index('fathom_mcp_sessions_user_id_idx').on(t.userId),
   ]
 )
 
+// Fathom OAuth tokens stored encrypted at rest
 export const fathomConnections = pgTable(
   'fathom_mcp_fathom_connections',
   {
@@ -65,14 +66,57 @@ export const fathomConnections = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
-    uniqueIndex('fathom_mcp_connections_user_id_unique').on(table.userId),
-    index('fathom_mcp_connections_inferred_recorder_email_idx').on(
-      table.inferredRecorderEmail
+  (t) => [
+    uniqueIndex('fathom_mcp_connections_user_id_unique').on(t.userId),
+    index('fathom_mcp_connections_recorder_email_idx').on(
+      t.inferredRecorderEmail
     ),
   ]
 )
 
+// OAuth 2.1 clients registered by MCP clients via dynamic registration
+export const oauthClients = pgTable('fathom_mcp_oauth_clients', {
+  id: text('id').primaryKey(), // client_id
+  clientName: text('client_name'),
+  clientUri: text('client_uri'),
+  redirectUris: text('redirect_uris').notNull(), // JSON: string[]
+  grantTypes: text('grant_types').notNull().default('["authorization_code"]'), // JSON: string[]
+  tokenEndpointAuthMethod: text('token_endpoint_auth_method')
+    .notNull()
+    .default('none'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+})
+
+// OAuth 2.1 authorization codes (single-use, PKCE required)
+export const oauthCodes = pgTable(
+  'fathom_mcp_oauth_codes',
+  {
+    id: text('id').primaryKey(), // the authorization code itself
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    redirectUri: text('redirect_uri').notNull(),
+    codeChallenge: text('code_challenge'),
+    codeChallengeMethod: text('code_challenge_method'),
+    scopes: text('scopes').notNull().default('["mcp"]'), // JSON: string[]
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index('fathom_mcp_oauth_codes_client_id_idx').on(t.clientId),
+    index('fathom_mcp_oauth_codes_user_id_idx').on(t.userId),
+  ]
+)
+
+// MCP bearer tokens — created manually or issued via OAuth
 export const mcpTokens = pgTable(
   'fathom_mcp_tokens',
   {
@@ -80,6 +124,9 @@ export const mcpTokens = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    clientId: text('client_id').references(() => oauthClients.id, {
+      onDelete: 'cascade',
+    }),
     label: text('label').notNull(),
     tokenHash: text('token_hash').notNull(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
@@ -88,8 +135,8 @@ export const mcpTokens = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
-    uniqueIndex('fathom_mcp_tokens_hash_unique').on(table.tokenHash),
-    index('fathom_mcp_tokens_user_id_idx').on(table.userId),
+  (t) => [
+    uniqueIndex('fathom_mcp_tokens_hash_unique').on(t.tokenHash),
+    index('fathom_mcp_tokens_user_id_idx').on(t.userId),
   ]
 )
