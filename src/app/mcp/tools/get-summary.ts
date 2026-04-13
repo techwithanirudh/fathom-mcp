@@ -3,6 +3,12 @@ import { z } from 'zod'
 
 import { createFathomClient } from '@/server/fathom'
 import type { SummaryResult } from '@/types/fathom'
+import { summaryOutputSchema } from '../schemas'
+
+const err = (text: string) => ({
+  isError: true as const,
+  content: [{ type: 'text' as const, text }],
+})
 
 export function registerGetSummary(server: McpServer) {
   server.registerTool(
@@ -10,9 +16,9 @@ export function registerGetSummary(server: McpServer) {
     {
       title: 'Fathom: Get Summary',
       annotations: {
-        readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
+        readOnlyHint: true,
       },
       description: 'Get the AI-generated summary of a Fathom meeting.',
       inputSchema: {
@@ -21,34 +27,43 @@ export function registerGetSummary(server: McpServer) {
           .int()
           .describe('The recording ID from list_meetings.'),
       },
+      outputSchema: summaryOutputSchema,
     },
     async ({ recording_id }, { authInfo }) => {
       const userId = authInfo?.extra?.userId as string | undefined
-
       if (!userId) {
-        return { content: [{ type: 'text', text: 'Unauthorized.' }] }
+        return err('Unauthorized.')
       }
 
-      const client = createFathomClient(userId)
-      const raw = await client.getRecordingSummary({
-        recordingId: recording_id,
-      })
+      try {
+        const client = createFathomClient(userId)
+        const raw = await client.getRecordingSummary({
+          recordingId: recording_id,
+        })
 
-      if (!(raw && 'summary' in raw)) {
-        return { content: [{ type: 'text', text: 'Summary not found.' }] }
-      }
+        if (!(raw && 'summary' in raw)) {
+          return err(`Summary not found for recording ${recording_id}.`)
+        }
 
-      const result: SummaryResult = {
-        summary: raw.summary
-          ? {
-              templateName: raw.summary.templateName,
-              markdownFormatted: raw.summary.markdownFormatted,
-            }
-          : null,
-      }
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        const result: SummaryResult = {
+          summary: raw.summary
+            ? {
+                markdownFormatted: raw.summary.markdownFormatted,
+                templateName: raw.summary.templateName,
+              }
+            : null,
+        }
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          structuredContent: result as unknown as Record<string, unknown>,
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        await server.server.sendLoggingMessage({
+          level: 'error',
+          data: `get_summary: ${msg}`,
+        })
+        return err(`Failed to get summary: ${msg}`)
       }
     }
   )

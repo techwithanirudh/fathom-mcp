@@ -2,6 +2,7 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 
 import { env } from '@/env'
 import { verifyToken } from '@/server/tokens'
+import { registerResources } from './resources'
 import { registerGetSummary } from './tools/get-summary'
 import { registerGetTranscript } from './tools/get-transcript'
 import { registerListMeetings } from './tools/list-meetings'
@@ -10,6 +11,7 @@ import { registerListTeams } from './tools/list-teams'
 
 const mcpHandler = createMcpHandler(
   (server) => {
+    registerResources(server)
     registerListMeetings(server)
     registerGetTranscript(server)
     registerGetSummary(server)
